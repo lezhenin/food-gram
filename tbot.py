@@ -2,6 +2,11 @@
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
 from aiogram.utils import executor
+
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
+
 import requests
 import random
 
@@ -15,6 +20,11 @@ def_place = ['McDonald’s', 'Burger King', 'KFC', 'SubWay', 'Теремок', '
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
+firebase_admin.initialize_app(
+    credentials.Certificate('credentials.json')
+)
+db = firestore.client()
+
 
 def get_id():  # для получения id чата
     MethodGetUpdates = 'https://api.telegram.org/bot{token}/getUpdates'.format(token=API_TOKEN)
@@ -26,6 +36,9 @@ def get_id():  # для получения id чата
 # обработик команды /start
 @dp.message_handler(commands=['start'])
 async def if_start(message: types.Message):
+    some_data = {"lastStartMessageId": message.message_id}
+    document = db.collection('user_events').document('user_%d' % message.from_user.id).get()
+    document.update(some_data) if document.exists else document.create(some_data)
     await bot.send_message(get_id(), "Привет!\nПомогу тебе и твоей группе упростить процесс заказа.")
 
 
