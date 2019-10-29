@@ -36,9 +36,8 @@ def get_id():  # для получения id чата
 # обработик команды /start
 @dp.message_handler(commands=['start'])
 async def if_start(message: types.Message):
-    some_data = {"lastStartMessageId": message.message_id}
-    document = db.collection('user_events').document('user_%d' % message.from_user.id).get()
-    document.update(some_data) if document.exists else document.create(some_data)
+    some_data = {'event': 'send_start_message', 'user_id': message.from_user.id, 'message_id': message.message_id}
+    db.collection('events').add(some_data)
     await bot.send_message(get_id(), "Привет!\nПомогу тебе и твоей группе упростить процесс заказа.")
 
 
