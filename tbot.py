@@ -2,6 +2,11 @@
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
 from aiogram.utils import executor
+
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
+
 import requests
 import random
 from pyzbar.pyzbar import decode
@@ -14,6 +19,7 @@ bot = Bot(token = API_TOKEN)
 bot.parse_mode = 'HTML'
 dp = Dispatcher(bot)
 
+
 # master_name - тот кто спровоцировал заказ (start)
 global order_info
 order_info = {'chat_id': '', 'master_name': '', 'master_id': ''}
@@ -24,6 +30,12 @@ orders = {}
 # бот запущен = 1 иначе 0 - нужно для проверки ниже
 global txt_en
 txt_en = 0
+
+firebase_admin.initialize_app(
+    credentials.Certificate('credentials.json')
+)
+db = firestore.client()
+
 
 #разрешить отпраить фото
 global ph_enable
@@ -60,6 +72,7 @@ def init(): # инициализация структуры при старте
 # обработик команды /start
 @dp.message_handler(commands=['start'])
 async def if_start(message: types.Message):
+
     if init(): # если заказ начинается, иниц-м главного заказчика и чат заказа
         await bot.send_message(order_info['chat_id'], "Привет, будем заказывать\n<b>"\
                                + str(order_info['master_name'])\
@@ -69,6 +82,12 @@ async def if_start(message: types.Message):
     else: # если заказ начат
         await bot.send_message(order_info['chat_id'], get_inf('user_name')\
                                + '! Заказ уже делается! Не хулигань. 😠')
+
+    some_data = {'event': 'send_start_message', 'user_id': message.from_user.id, 'message_id': message.message_id}
+    db.collection('events').add(some_data)
+    await bot.send_message(get_id(), "Привет!\nПомогу тебе и твоей группе упростить процесс заказа.")
+
+
 
 
 @dp.message_handler(commands=['makeorder'])
@@ -187,10 +206,6 @@ async def handle_docs_photo(message):
             await bot.send_message(message.chat.id, e)
     else:
         await bot.send_message(message.chat.id, 'К чему ты это?', reply_to_message_id=message)
-
-
-
-
 
 
 
