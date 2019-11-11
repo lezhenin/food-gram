@@ -1,7 +1,8 @@
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
-from aiogram.utils import executor
+from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.utils import executor
 
 from orderinfo import OrderInfo
 
@@ -19,112 +20,149 @@ bot.parse_mode = 'HTML'
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
-# order_chats[id чатa заказа][id того кто заказывает]=что он заказывает
-order_chats = {}  # все чаты которые делают заказ
-starter = {}  # те кто начинают чат (класс OrderInfo)
-# массивы выше мб можно объединить (по сути - это в бд поэтому не важно как оно здесь)
 
-# костыли:
-order_enable = 0
-photo_enable = 0
-
-# kod[chat_id] = n-значный код?
-kod = {}
+class OrderState(StatesGroup):
+    idle = State()
+    gather_places = State()
+    poll = State()
 
 
-# обработчик команды /start
 @dp.message_handler(commands=['start'])
 async def if_start(message: types.Message):
-    global order_chats
 
-    # если старт пишешь в личку боту
     if message.chat.type == 'private':
         message_text = "%s, привет. " \
                        "Команда /help поможет разобраться как что работает" % message.from_user.first_name
         await bot.send_message(message.chat.id, message_text)
         return
 
-    # когда старт был нажат уже кем-то
-    if await storage.get_data(chat=message.chat.id) is None:
+    current_state = await storage.get_state(chat=message.chat.id)
+    if current_state is not None and current_state != OrderState.idle.state:
         message_text = "%s! Заказ уже делается! Не хулигань. 😠" % message.from_user.first_name
         await bot.send_message(message.chat.id, message_text)
         return
 
-    await storage.set_data(chat=message.chat.id, data=dict(OrderInfo.from_message(message)))
+    order_info = OrderInfo.from_message(message)
+    await storage.set_data(chat=message.chat.id, data={'order': order_info.to_dict()})
+    await storage.set_state(chat=message.chat.id, state=OrderState.gather_places.state)
+
     message_text = "Привет, будем заказывать\n" \
                    "<b>%s</b> - инициатор заказа, будет иметь основные права и обязанности. " \
                    "Пишите места командой" % message.from_user.first_name
     await bot.send_message(message.chat.id, message_text)
 
     # информируем главного что он главный
-    message_text = "Привет, %s! Ты решил сделать заказ в чате %s \n 😎 " % (
-    message.from_user.first_name, message.chat.title)
-    await bot.send_message(message.from_user.id, message_text)
-
-    # генерируем код
-    kod[message.chat.id] = random.randint(1000, 9999)  # пока не используется, потом
+    # message_text = "Привет, %s! Ты решил сделать заказ в чате %s \n 😎 " \
+    #                % (message.from_user.first_name, message.chat.title)
+    # await bot.send_message(message.from_user.id, message_text)
 
 
-# обработчик команды /makeorder
-@dp.message_handler(commands=['makeorder'])
-async def if_makeorder(message: types.Message):
-    global order_chats
+@dp.message_handler(commands=['addPlace'])
+async def if_add_place(message: types.Message):
 
-    # польз-ль уже жал makeorder
-    if message.from_user.id in order_chats[message.chat.id]:
-        await bot.send_message(message.from_user.id, 'Заказывай же!')
+    current_state = await storage.get_state(chat=message.chat.id, default=OrderState.idle.state)
+    if current_state != OrderState.gather_places.state:
+        message_text = "Данная команда недоступна на текущей стадии заказа."
+        await bot.send_message(message.chat.id, message_text)
         return
 
-    # запоминаем того кто заказывает
-    order_chats[message.chat.id][message.from_user.id] = {}
-    message_text = "<b>%s</b> делает заказ" % message.from_user.first_name
+    data = await storage.get_data(chat=message.chat.id)
+    order = OrderInfo(**data['order'])
+
+    new_place = message.text.split(' ', maxsplit=1)[1]
+    order.add_place(new_place)
+    await storage.update_data(chat=message.chat.id, data={'order': order.to_dict()})
+
+    message_text = f"Место \"{new_place}\" было добавлено. Места участвующие в голосовании: {order.places}."
     await bot.send_message(message.chat.id, message_text)
-    message_text = "Заказ через команду /eat. " \
-                   "Уникальный код чата %s" % kod[message.chat.id]
-    await bot.send_message(message.from_user.id, message_text)
 
 
-# обработчик команды /eat & /bill
-@dp.message_handler(content_types=['text'])
-async def if_message(message: types.Message):
-    global order_chats
-    global order_enable
-    global photo_enable
-
-    # командой eat разрешаем ввод заказа текстом
-    if message.text == '/eat':
-        # проверка что пользователь регистрировался в чате - жал makeorder
-        for i in order_chats:
-            if message.from_user.id in order_chats[i]:
-                order_enable = 1
-                await bot.send_message(message.from_user.id, 'Пиши пункты заказа через перенос')
-                return
-        # если не нашли пользователя в массиве
-        await bot.send_message(message.from_user.id, "Вас нет в списках! Жмите makeorder в чате заказа")
+@dp.message_handler(commands=['startPoll'])
+async def if_start_poll(message: types.Message):
+    current_state = await storage.get_state(chat=message.chat.id, default=OrderState.idle.state)
+    if current_state != OrderState.gather_places.state:
+        message_text = "Данная команда недоступна на текущей стадии заказа."
+        await bot.send_message(message.chat.id, message_text)
         return
 
-    # командой bill разрешаем отправку фото
-    elif message.text == '/bill':
-        photo_enable = 1
-        await bot.send_message(message.from_user.id, 'Отправь фото чека\nФото должно быть четким')
+    await storage.set_state(chat=message.chat.id, state=OrderState.poll.state)
 
-        # если просто текст поступил с разрешенным txt_enable
-    else:
-        if order_enable:
-            order_enable = 0
-            tmp = 0
-            for i in order_chats:
-                if message.from_user.id in order_chats[i]:
-                    tmp = i
-                    break
-            for i in range(len(message.text.split())):
-                order_chats[tmp][message.from_user.id][i] = message.text.split()[i]
-            to_out = []
-            for i in order_chats[tmp][message.from_user.id]:
-                to_out.append('<b>' + str(i) + '</b> - ' + str(order_chats[tmp][message.from_user.id][i]))
-            await bot.send_message(message.from_user.id, "\n".join(to_out))
-        else:
-            await bot.send_message(message.from_user.id, "/help  ⬅  жми")
+    data = await storage.get_data(chat=message.chat.id)
+    order = OrderInfo(**data['order'])
+
+    question = "Из какого места заказать еду?"
+    sent_message = await bot.send_poll(message.chat.id, question, order.places)
+
+    await storage.update_data(chat=message.chat.id, data={'poll_message_id': sent_message.message_id})
+
+
+@dp.message_handler(commands=['showPlace'])
+async def if_show_place(message: types.Message):
+    current_state = await storage.get_state(chat=message.chat.id, default=OrderState.idle.state)
+    if current_state != OrderState.poll.state:
+        message_text = "Данная команда недоступна на текущей стадии заказа."
+        await bot.send_message(message.chat.id, message_text)
+        return
+
+    data = await storage.get_data(chat=message.chat.id)
+    poll_message_id = data['poll_message_id']
+    poll = await bot.stop_poll(message.chat.id, poll_message_id)
+
+    poll.options.sort(key=lambda o: o.voter_count)
+    winner_option = poll.options[0]
+
+    message_text = f"Вариант \"{winner_option.text}\" набраил наибольшее количество голосов."
+    await bot.send_message(message.chat.id, message_text)
+
+
+@dp.message_handler(commands='cancel')
+async def if_cancel(message: types.Message):
+    await storage.reset_state(chat=message.chat.id, with_data=True)
+
+    message_text = "Текущий заказ отменен."
+    await bot.send_message(message.chat.id, message_text)
+
+# # обработчик команды /eat & /bill
+# @dp.message_handler(content_types=['text'])
+# async def if_message(message: types.Message):
+#     global order_chats
+#     global order_enable
+#     global photo_enable
+#
+#     # командой eat разрешаем ввод заказа текстом
+#     if message.text == '/eat':
+#         # проверка что пользователь регистрировался в чате - жал makeorder
+#         for i in order_chats:
+#             if message.from_user.id in order_chats[i]:
+#                 order_enable = 1
+#                 await bot.send_message(message.from_user.id, 'Пиши пункты заказа через перенос')
+#                 return
+#         # если не нашли пользователя в массиве
+#         await bot.send_message(message.from_user.id, "Вас нет в списках! Жмите makeorder в чате заказа")
+#         return
+#
+#     # командой bill разрешаем отправку фото
+#     elif message.text == '/bill':
+#         photo_enable = 1
+#         await bot.send_message(message.from_user.id, 'Отправь фото чека\nФото должно быть четким')
+#
+#         # если просто текст поступил с разрешенным txt_enable
+#     else:
+#         if order_enable:
+#             order_enable = 0
+#             tmp = 0
+#             for i in order_chats:
+#                 if message.from_user.id in order_chats[i]:
+#                     tmp = i
+#                     break
+#             for i in range(len(message.text.split())):
+#                 order_chats[tmp][message.from_user.id][i] = message.text.split()[i]
+#             to_out = []
+#             for i in order_chats[tmp][message.from_user.id]:
+#                 to_out.append('<b>' + str(i) + '</b> - ' + str(order_chats[tmp][message.from_user.id][i]))
+#             await bot.send_message(message.from_user.id, "\n".join(to_out))
+#         else:
+#             await bot.send_message(message.from_user.id, "/help  ⬅  жми")
 
 
 def bill_existing(fn, fd, fpd, date, sum):
