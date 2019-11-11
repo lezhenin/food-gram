@@ -1,30 +1,29 @@
 from collections import namedtuple
 
-class OrderInfo:
 
-    def __init__(
-            self,
-            chat_id,
-            owner_user_id,
-            owner_user_first_name,
-            owner_user_last_name,
-            places
-    ):
-        self.chat_id = chat_id
-        self.owner_user_id = owner_user_id
-        self.owner_user_first_name = owner_user_first_name
-        self.owner_user_last_name = owner_user_last_name
-        self.places = places
+class OrderInfo(namedtuple("OrderInfo", [
+    "chat_id",
+    "owner_user_id",
+    "owner_user_name",
+    "places"
+])):
 
-    def __str__(self):
-        return f"order in chat {self.chat_id} owned by {self.owner_user_id}"
+    def add_place(self, new_place):
+        if new_place not in self.places:
+            self.places.append(new_place)
+
+    def to_dict(self):
+        return self._asdict()
+
+    @staticmethod
+    def from_dict(d):
+        return OrderInfo(**d)
 
     @staticmethod
     def from_message(message):
         return OrderInfo(
-            message.chat.id,
-            message.from_user.id,
-            message.from_user.first_name,
-            message.from_user.last_name,
-            places=[]
+            chat_id=message.chat.id,
+            owner_user_id=message.from_user.id,
+            owner_user_name=message.from_user.first_name,
+            places=[],
         )
