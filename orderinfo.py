@@ -10,7 +10,7 @@ class OrderInfo:
     chat_id: int
     owner_user_id: int
     owner_user_name: int
-    places: typing.List[int]
+    places: typing.List[str]
 
     def add_place(self, new_place):
         if new_place not in self.places:
