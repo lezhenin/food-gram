@@ -1,23 +1,24 @@
-from collections import namedtuple
+from dataclasses import dataclass
+from dataclasses import asdict
+
+import typing
 
 
-class OrderInfo(namedtuple("OrderInfo", [
-    "chat_id",
-    "owner_user_id",
-    "owner_user_name",
-    "places"
-])):
+@dataclass(init=True)
+class OrderInfo:
+
+    chat_id: int
+    owner_user_id: int
+    owner_user_name: int
+    places: typing.List[int]
 
     def add_place(self, new_place):
         if new_place not in self.places:
             self.places.append(new_place)
 
-    def to_dict(self):
-        return self._asdict()
-
     @staticmethod
-    def from_dict(d):
-        return OrderInfo(**d)
+    def as_dict(order_info):
+        return asdict(order_info)
 
     @staticmethod
     def from_message(message):
