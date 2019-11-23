@@ -136,6 +136,27 @@ async def handle_docs_photo(message):
     else:
         await bot.send_message(message.chat.id, 'К чему ты это?', reply_to_message_id=message)
 
+		
+# inline mode
+# DON'T FORGET to write "/setinline" to BotFather to change inline queries status.
+@dp.inline_handler()
+async def inline_echo(inline_query: InlineQuery):
+# todo: add all commands to list, add database query to get restaurants and food
+    lst = {'/start':'Начать заказ', '/eat': 'Выбрать блюдо', '/bill': 'Загрузить чек', '/makeorder':'Сделать заказ'}
+    inpLst = []
+    for i in lst.keys():
+        if i.startswith(inline_query.query):
+            inpLst.append(
+                InlineQueryResultArticle(
+                    id=hashlib.md5(i.encode()).hexdigest(),
+                    title=f'{i!r}',
+                    input_message_content=InputTextMessageContent(i),
+                    description = lst.get(i)
+                )
+            )
+    # cache_time=1 for testing (default is 300s or 5m)
+    await bot.answer_inline_query(inline_query.id, results=inpLst, cache_time=1)
+
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
