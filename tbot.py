@@ -48,6 +48,7 @@ async def if_start_in_private(message: types.Message):
         return
 
 
+# None is default value of chat_state, todo initialize with idle
 @dp.message_handler(commands=['start'], chat_state=[ChatState.idle, None])
 async def if_start(message: types.Message):
 
@@ -161,12 +162,6 @@ async def if_cancel(message: types.Message):
 #             await bot.send_message(message.from_user.id, "\n".join(to_out))
 #         else:
 #             await bot.send_message(message.from_user.id, "/help  ⬅  жми")
-
-
-@dp.message_handler(commands='test', chat_state=ChatState.gather_places)
-async def if_test(message: types.Message, chat_state):
-    print(chat_state)
-    print('test handled')
 
 
 @dp.message_handler(content_types=['photo'])
