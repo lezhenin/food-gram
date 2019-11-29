@@ -1,12 +1,14 @@
 import logging
+from enum import Enum
 
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
-from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.utils import executor
 
 from orderinfo import OrderInfo
+from extensions.filters import OrderOwnerFilter, ChatStateFilter, ChatTypeFilter
+
 import photo_proc
 
 logging.basicConfig(level=logging.DEBUG)
@@ -19,16 +21,25 @@ bot.parse_mode = 'HTML'
 
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
+dp.filters_factory.bind(OrderOwnerFilter)
+dp.filters_factory.bind(ChatStateFilter)
+dp.filters_factory.bind(ChatTypeFilter)
 
 
-class OrderState(StatesGroup):
-    idle = State()
-    gather_places = State()
-    poll = State()
+class ChatState:
+    idle = "idle"
+    gather_places = "gather_places"
+    poll = "poll"
 
 
-@dp.message_handler(commands=['start'])
-async def if_start(message: types.Message):
+class UserState(Enum):
+    idle = "idle"
+    making_order = "making_order"
+    finish_order = "finish_order"
+
+
+@dp.message_handler(commands=['start'], chat_type='private')
+async def if_start_in_private(message: types.Message):
 
     if message.chat.type == 'private':
         message_text = "%s, привет. " \
@@ -36,13 +47,14 @@ async def if_start(message: types.Message):
         await bot.send_message(message.chat.id, message_text)
         return
 
-    current_state = await storage.get_state(chat=message.chat.id)
-    if current_state is not None and current_state != OrderState.idle.state:
-        return
+
+# None is default value of chat_state, todo initialize with idle
+@dp.message_handler(commands=['start'], chat_state=[ChatState.idle, None])
+async def if_start(message: types.Message):
 
     order_info = OrderInfo.from_message(message)
     await storage.set_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order_info)})
-    await storage.set_state(chat=message.chat.id, state=OrderState.gather_places.state)
+    await storage.set_state(chat=message.chat.id, state=ChatState.gather_places)
 
     message_text = "Привет, будем заказывать\n" \
                    "<b>%s</b> - инициатор заказа, будет иметь основные права и обязанности. " \
@@ -55,12 +67,8 @@ async def if_start(message: types.Message):
     # await bot.send_message(message.from_user.id, message_text)
 
 
-@dp.message_handler(commands=['addPlace'])
+@dp.message_handler(commands=['addPlace'], chat_state=ChatState.gather_places)
 async def if_add_place(message: types.Message):
-    # todo make filter for chat state
-    current_state = await storage.get_state(chat=message.chat.id)
-    if current_state != OrderState.gather_places.state:
-        return
 
     parts = message.text.split(' ', maxsplit=1)
     if len(parts) < 2:
@@ -77,20 +85,13 @@ async def if_add_place(message: types.Message):
     await bot.send_message(message.chat.id, message_text)
 
 
-@dp.message_handler(commands=['startPoll'])
+@dp.message_handler(commands=['startPoll'], is_order_owner=True, chat_state=ChatState.gather_places)
 async def if_start_poll(message: types.Message):
-    # todo make filter for chat state
-    current_state = await storage.get_state(chat=message.chat.id)
-    if current_state != OrderState.gather_places.state:
-        return
 
-    # todo make filter for owner
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
-    if order.owner_user_id != message.from_user.id:
-        return
 
-    await storage.set_state(chat=message.chat.id, state=OrderState.poll.state)
+    await storage.set_state(chat=message.chat.id, state=ChatState.poll)
 
     question = "Из какого места заказать еду?"
     sent_message = await bot.send_poll(message.chat.id, question, order.places, None, None)
@@ -98,17 +99,10 @@ async def if_start_poll(message: types.Message):
     await storage.update_data(chat=message.chat.id, data={'poll_message_id': sent_message.message_id})
 
 
-@dp.message_handler(commands=['showPlace'])
+@dp.message_handler(commands=['showPlace'], is_order_owner=True, chat_state=ChatState.poll)
 async def if_show_place(message: types.Message):
 
-    current_state = await storage.get_state(chat=message.chat.id)
-    if current_state != OrderState.poll.state:
-        return
-
     data = await storage.get_data(chat=message.chat.id)
-    order = OrderInfo(**data['order'])
-    if order.owner_user_id != message.from_user.id:
-        return
 
     poll_message_id = data['poll_message_id']
     poll = await bot.stop_poll(message.chat.id, poll_message_id)
@@ -120,17 +114,8 @@ async def if_show_place(message: types.Message):
     await bot.send_message(message.chat.id, message_text)
 
 
-@dp.message_handler(commands='cancel')
+@dp.message_handler(commands='cancel', is_order_owner=True, chat_state_not=[ChatState.idle, None])
 async def if_cancel(message: types.Message):
-    current_state = await storage.get_state(chat=message.chat.id)
-    if current_state is None or current_state == OrderState.idle.state:
-        return
-
-    data = await storage.get_data(chat=message.chat.id)
-    order = OrderInfo(**data['order'])
-    if order.owner_user_id != message.from_user.id:
-        return
-
     await storage.reset_state(chat=message.chat.id, with_data=True)
 
     message_text = "Текущий заказ отменен."
