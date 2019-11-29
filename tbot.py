@@ -4,6 +4,7 @@ from enum import Enum
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils import executor
 
 from orderinfo import OrderInfo
@@ -32,7 +33,7 @@ class ChatState:
     poll = "poll"
 
 
-class UserState(Enum):
+class UserState:
     idle = "idle"
     making_order = "making_order"
     finish_order = "finish_order"
@@ -110,8 +111,19 @@ async def if_show_place(message: types.Message):
     poll.options.sort(key=lambda o: o.voter_count)
     winner_option = poll.options[0]
 
+    inline_button_text = "Принять участие в формировании заказа"
+    inline_button_data = str(message.chat.id)
+
+    keyboard_markup = types.InlineKeyboardMarkup()
+    keyboard_markup.add(
+        types.InlineKeyboardButton(inline_button_text, callback_data=inline_button_data)
+    )
+
     message_text = f"Вариант \"{winner_option.text}\" набраил наибольшее количество голосов."
-    await bot.send_message(message.chat.id, message_text)
+    await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
+
+    data = await storage.get_data(chat=message.chat.id)
+    await storage.update_data(chat=message.chat.id, data=data.pop('poll_message_id'))
 
 
 @dp.message_handler(commands='cancel', is_order_owner=True, chat_state_not=[ChatState.idle, None])
@@ -120,6 +132,23 @@ async def if_cancel(message: types.Message):
 
     message_text = "Текущий заказ отменен."
     await bot.send_message(message.chat.id, message_text)
+
+
+@dp.callback_query_handler()
+async def inline_kb_answer_callback_handler(query: types.CallbackQuery):
+    chat = await bot.get_chat(chat_id=query.data)
+
+    data = await storage.get_data(chat=chat.id)
+    order = OrderInfo(**data['order'])
+    order.add_participant(query.from_user.id)
+
+    await storage.update_data(chat=chat.id, data={'order': OrderInfo.as_dict(order)})
+
+    await storage.set_state(user=query.from_user.id, state=UserState.making_order)
+    await storage.update_data(user=query.from_user.id, data={'order_chat_id': chat.id})
+
+    message_text = f"Вы приняли участие в формирование заказа, созданного в \"{chat.title}\""
+    await bot.send_message(query.from_user.id, message_text)
 
 # # обработчик команды /eat & /bill
 # @dp.message_handler(content_types=['text'])
