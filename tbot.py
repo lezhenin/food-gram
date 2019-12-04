@@ -8,7 +8,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils import executor
 
 from orderinfo import OrderInfo
-from extensions.filters import OrderOwnerFilter, ChatStateFilter, ChatTypeFilter
+from extensions.filters import OrderOwnerFilter, UserStateFilter, ChatStateFilter, ChatTypeFilter
 
 import photo_proc
 
@@ -22,7 +22,9 @@ bot.parse_mode = 'HTML'
 
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
+
 dp.filters_factory.bind(OrderOwnerFilter)
+dp.filters_factory.bind(UserStateFilter)
 dp.filters_factory.bind(ChatStateFilter)
 dp.filters_factory.bind(ChatTypeFilter)
 
@@ -41,7 +43,6 @@ class UserState:
 
 @dp.message_handler(commands=['start'], chat_type='private')
 async def if_start_in_private(message: types.Message):
-
     if message.chat.type == 'private':
         message_text = "%s, привет. " \
                        "Команда /help поможет разобраться как что работает" % message.from_user.first_name
@@ -52,7 +53,6 @@ async def if_start_in_private(message: types.Message):
 # None is default value of chat_state, todo initialize with idle
 @dp.message_handler(commands=['start'], chat_state=[ChatState.idle, None])
 async def if_start(message: types.Message):
-
     order_info = OrderInfo.from_message(message)
     await storage.set_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order_info)})
     await storage.set_state(chat=message.chat.id, state=ChatState.gather_places)
@@ -70,7 +70,6 @@ async def if_start(message: types.Message):
 
 @dp.message_handler(commands=['addPlace'], chat_state=ChatState.gather_places)
 async def if_add_place(message: types.Message):
-
     parts = message.text.split(' ', maxsplit=1)
     if len(parts) < 2:
         return
@@ -88,7 +87,6 @@ async def if_add_place(message: types.Message):
 
 @dp.message_handler(commands=['startPoll'], is_order_owner=True, chat_state=ChatState.gather_places)
 async def if_start_poll(message: types.Message):
-
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
 
@@ -102,13 +100,13 @@ async def if_start_poll(message: types.Message):
 
 @dp.message_handler(commands=['showPlace'], is_order_owner=True, chat_state=ChatState.poll)
 async def if_show_place(message: types.Message):
-
     data = await storage.get_data(chat=message.chat.id)
 
     poll_message_id = data['poll_message_id']
     poll = await bot.stop_poll(message.chat.id, poll_message_id)
 
-    poll.options.sort(key=lambda o: o.voter_count)
+    # [print(opt)]
+    poll.options.sort(key=lambda o: o.voter_count, reverse=True)
     winner_option = poll.options[0]
 
     inline_button_text = "Принять участие в формировании заказа"
@@ -123,7 +121,8 @@ async def if_show_place(message: types.Message):
     await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
 
     data = await storage.get_data(chat=message.chat.id)
-    await storage.update_data(chat=message.chat.id, data=data.pop('poll_message_id'))
+    data.pop('poll_message_id')
+    await storage.update_data(chat=message.chat.id, data=data)
 
 
 @dp.message_handler(commands='cancel', is_order_owner=True, chat_state_not=[ChatState.idle, None])
@@ -138,6 +137,11 @@ async def if_cancel(message: types.Message):
 async def inline_kb_answer_callback_handler(query: types.CallbackQuery):
     chat = await bot.get_chat(chat_id=query.data)
 
+    # # todo use filter
+    # user_state = await storage.get_state(user=query.from_user.id)
+    # if (user_state is not None) and (user_state != UserState.idle):
+    #     return
+
     data = await storage.get_data(chat=chat.id)
     order = OrderInfo(**data['order'])
     order.add_participant(query.from_user.id)
@@ -149,6 +153,73 @@ async def inline_kb_answer_callback_handler(query: types.CallbackQuery):
 
     message_text = f"Вы приняли участие в формирование заказа, созданного в \"{chat.title}\""
     await bot.send_message(query.from_user.id, message_text)
+
+
+@dp.message_handler(commands=['add'], chat_type='private', state='*', user_state=UserState.making_order)
+async def if_add_in_private(message: types.Message):
+    parts = message.text.split(' ', maxsplit=1)
+    if len(parts) < 2:
+        return
+
+    data = await storage.get_data(user=message.from_user.id)
+
+    dish = parts[1]
+    dishes = data.get('dishes', [])
+    dishes.append(dish)
+
+    await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
+
+
+@dp.message_handler(
+    commands=['delete'], regexp='/delete \\d+', chat_type='private',
+    state='*', user_state=UserState.making_order
+)
+async def if_add_in_private(message: types.Message):
+    parts = message.text.split(' ', maxsplit=1)
+    if len(parts) < 2:
+        return
+
+    index = int(parts[1])
+    data = await storage.get_data(user=message.from_user.id)
+    print(data)
+    dishes = data.get('dishes', [])
+    if index - 1 < len(dishes):
+        del dishes[index-1]
+        await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
+
+
+@dp.message_handler(commands=['list'], chat_type='private', state='*', user_state=UserState.making_order)
+async def if_add_in_private(message: types.Message):
+    data = await storage.get_data(user=message.from_user.id)
+    print(data)
+
+    dishes = data.get('dishes', [])
+    dishes = [str(i + 1) + '. ' + dishes[i] for i in range(len(dishes))]
+
+    print(dishes)
+
+    message_text = 'Блюда в заказе:\n' + '\n'.join(dishes) if (len(dishes) > 0) else 'Ваш заказ пуст'
+    await bot.send_message(message.from_user.id, message_text)
+
+
+@dp.message_handler(commands=['finish'], chat_type='private', state='*', user_state=UserState.making_order)
+async def if_add_in_private(message: types.Message):
+    data = await storage.get_data(user=message.from_user.id)
+    print(data)
+
+    dishes = data.get('dishes', [])
+    dishes = [str(i + 1) + '. ' + dishes[i] for i in range(len(dishes))]
+
+    print(dishes)
+
+    if len(dishes) > 0:
+        message_text = 'Заказ завершен. Блюда в заказе:\n' + '\n'.join(dishes)
+        await storage.set_state(user=message.from_user.id, state=UserState.making_order)
+    else:
+        message_text = 'Вы ничего не добавили в заказ.'
+
+    await bot.send_message(message.from_user.id, message_text)
+
 
 # # обработчик команды /eat & /bill
 # @dp.message_handler(content_types=['text'])
