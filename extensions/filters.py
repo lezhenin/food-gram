@@ -24,16 +24,18 @@ class UserStateFilter(AbstractFilter):
     def __init__(self, dispatcher, user_state=None, user_state_not=None):
 
         if user_state is None and user_state_not is None:
-            raise ValueError("chat_state and chat_state_not cannot be None simultaneously")
+            raise ValueError("user_state and user_state_not cannot be None simultaneously")
 
         if user_state is not None and user_state_not is not None:
-            raise ValueError("chat_state and chat_state_not cannot be not None simultaneously")
+            raise ValueError("user_state and user_state_not cannot be not None simultaneously")
 
         print(user_state, user_state_not)
 
         self.dispatcher = dispatcher
         self.negate = user_state is None
-        self.chat_states_to_check =  wrap_list(user_state if not self.negate else user_state_not)
+        self.chat_states_to_check = wrap_list(user_state if not self.negate else user_state_not)
+
+        print(self.chat_states_to_check)
 
     @classmethod
     def validate(cls, full_config):
@@ -52,10 +54,11 @@ class UserStateFilter(AbstractFilter):
         if message is None:
             return False
 
-        chat_id = message.chat.id
         user_id = message.from_user.id
 
-        current_state = await self.dispatcher.storage.get_state(chat=chat_id, user=user_id)
+        current_state = await self.dispatcher.storage.get_state(user=user_id)
+
+        print(current_state, self.chat_states_to_check)
 
         if current_state in self.chat_states_to_check and self.negate:
             return False
