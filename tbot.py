@@ -1,6 +1,5 @@
 import io
 import logging
-from enum import Enum
 
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
@@ -142,15 +141,9 @@ async def if_cancel(message: types.Message):
     await bot.send_message(message.chat.id, message_text)
 
 
-@dp.callback_query_handler()
+@dp.callback_query_handler(user_state=[UserState.idle, None])
 async def inline_kb_answer_callback_handler(query: types.CallbackQuery):
     chat = await bot.get_chat(chat_id=query.data)
-
-    # # todo use filter
-    # user_state = await storage.get_state(user=query.from_user.id)
-    # if (user_state is not None) and (user_state != UserState.idle):
-    #     return
-
     data = await storage.get_data(chat=chat.id)
     order = OrderInfo(**data['order'])
     order.add_participant(query.from_user.id)
@@ -171,7 +164,6 @@ async def if_add_in_private(message: types.Message):
         return
 
     data = await storage.get_data(user=message.from_user.id)
-
     dish = parts[1]
     dishes = data.get('dishes', [])
     dishes.append(dish)
@@ -180,7 +172,7 @@ async def if_add_in_private(message: types.Message):
 
 
 @dp.message_handler(
-    commands=['delete'], regexp='/delete \\d+', chat_type='private',
+    commands=['delete'], regexp='/delete \\d+\\s*', chat_type='private',
     state='*', user_state=UserState.making_order
 )
 async def if_add_in_private(message: types.Message):
@@ -200,13 +192,8 @@ async def if_add_in_private(message: types.Message):
 @dp.message_handler(commands=['list'], chat_type='private', state='*', user_state=UserState.making_order)
 async def if_add_in_private(message: types.Message):
     data = await storage.get_data(user=message.from_user.id)
-    print(data)
-
     dishes = data.get('dishes', [])
     dishes = [str(i + 1) + '. ' + dishes[i] for i in range(len(dishes))]
-
-    print(dishes)
-
     message_text = 'Блюда в заказе:\n' + '\n'.join(dishes) if (len(dishes) > 0) else 'Ваш заказ пуст'
     await bot.send_message(message.from_user.id, message_text)
 
@@ -214,63 +201,34 @@ async def if_add_in_private(message: types.Message):
 @dp.message_handler(commands=['finish'], chat_type='private', state='*', user_state=UserState.making_order)
 async def if_add_in_private(message: types.Message):
     data = await storage.get_data(user=message.from_user.id)
-    print(data)
-
     dishes = data.get('dishes', [])
     dishes = [str(i + 1) + '. ' + dishes[i] for i in range(len(dishes))]
-
-    print(dishes)
-
     if len(dishes) > 0:
         message_text = 'Заказ завершен. Блюда в заказе:\n' + '\n'.join(dishes)
-        await storage.set_state(user=message.from_user.id, state=UserState.making_order)
+        await storage.set_state(user=message.from_user.id, state=UserState.finish_order)
     else:
         message_text = 'Вы ничего не добавили в заказ.'
 
     await bot.send_message(message.from_user.id, message_text)
 
 
-# # обработчик команды /eat & /bill
-# @dp.message_handler(content_types=['text'])
-# async def if_message(message: types.Message):
-#     global order_chats
-#     global order_enable
-#     global photo_enable
-#
-#     # командой eat разрешаем ввод заказа текстом
-#     if message.text == '/eat':
-#         # проверка что пользователь регистрировался в чате - жал makeorder
-#         for i in order_chats:
-#             if message.from_user.id in order_chats[i]:
-#                 order_enable = 1
-#                 await bot.send_message(message.from_user.id, 'Пиши пункты заказа через перенос')
-#                 return
-#         # если не нашли пользователя в массиве
-#         await bot.send_message(message.from_user.id, "Вас нет в списках! Жмите makeorder в чате заказа")
-#         return
-#
-#     # командой bill разрешаем отправку фото
-#     elif message.text == '/bill':
-#         photo_enable = 1
-#         await bot.send_message(message.from_user.id, 'Отправь фото чека\nФото должно быть четким')
-#
-#         # если просто текст поступил с разрешенным txt_enable
-#     else:
-#         if order_enable:
-#             order_enable = 0
-#             tmp = 0
-#             for i in order_chats:
-#                 if message.from_user.id in order_chats[i]:
-#                     tmp = i
-#                     break
-#             for i in range(len(message.text.split())):
-#                 order_chats[tmp][message.from_user.id][i] = message.text.split()[i]
-#             to_out = []
-#             for i in order_chats[tmp][message.from_user.id]:
-#                 to_out.append('<b>' + str(i) + '</b> - ' + str(order_chats[tmp][message.from_user.id][i]))
-#             await bot.send_message(message.from_user.id, "\n".join(to_out))
-#         else:
-#             await bot.send_message(message.from_user.id, "/help  ⬅  жми")
+@dp.message_handler(commands=['status'], chat_type='private', is_order_owner=True,  state='*', user_state=UserState.making_order)
+async def if_add_in_private(message: types.Message):
+    data = await storage.get_data(user=message.from_user.id)
+    chat_id = data['order_chat_id']
+    data = await storage.get_data(chat=chat_id)
+
+    message_text = ''
+    participants = data['order']['participants']
+    for user in participants:
+        user_chat = await bot.get_chat(chat_id=user)
+        state = await storage.get_state(user=user)
+        if state == UserState.making_order:
+            message_text += f'Пользователь \'{user_chat.full_name}\' формирует заказ\n'
+        elif state == UserState.finish_order:
+            message_text += f'Пользователь \'{user_chat.full_name}\' завершил формирование заказа\n'
+
+    await bot.send_message(message.from_user.id, message_text)
 
 
 @dp.message_handler(content_types=['photo'])
