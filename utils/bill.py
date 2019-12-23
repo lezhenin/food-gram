@@ -19,16 +19,22 @@ async def is_bill_exist(bill):
     return response.status_code == 204
 
 
-async def get_bill_data(bill):
+async def get_bill_data(bill, retries=2):
     if not (await is_bill_exist(bill)):
         return None
     fn, fd, fpd = bill['fn'], bill['i'], bill['fp']
     url = f'{BILL_DATABASE_URL}/inns/*/kkts/*/fss/{fn}/tickets/{fd}'
     params = {'fiscalSign': fpd, 'sendToEmail': 'no'}
     headers = {'device-id': '', 'device-os': '', 'Authorization': f'Basic {PASSWORD}'}
-    response = await requests.get(url, params=params, headers=headers)
-    logging.debug(f'Retrieve bill data: response_code = {response.status_code}')
-    return response.json()
+    while True:
+        logging.debug(f'Retrieve bill data: retries left = {retries}')
+        response = await requests.get(url, params=params, headers=headers)
+        logging.debug(f'Retrieve bill data: retries left = {retries - 1}, response_code = {response.status_code}')
+        if response.status_code == 200:
+            return response.json()
+        retries -= 1
+        if retries <= 0:
+            return None
 
 
 async def decode_qr_bill(image_bytes):
