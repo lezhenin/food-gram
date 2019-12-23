@@ -1,3 +1,4 @@
+import io
 import logging
 from enum import Enum
 
@@ -10,7 +11,7 @@ from aiogram.utils import executor
 from orderinfo import OrderInfo
 from extensions.filters import OrderOwnerFilter, UserStateFilter, ChatStateFilter, ChatTypeFilter
 
-import photo_proc
+from utils.bill import decode_qr_bill, get_bill_data
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -265,15 +266,32 @@ async def if_add_in_private(message: types.Message):
 
 
 @dp.message_handler(content_types=['photo'])
-async def handle_docs_photo(message):
-    photo_enable = False  # TODO handle current state
-    if photo_enable:
-        try:
-            await photo_proc.qr_decode(message, bot, API_TOKEN)
-        except Exception as e:
-            await bot.send_message(message.chat.id, e)
-    else:
-        await bot.send_message(message.chat.id, 'К чему ты это?', reply_to_message_id=message)
+async def handle_docs_photo(message: types.Message):
+
+    photos = message.photo
+    if len(photos) < 1:
+        return
+
+    image_bytes = io.BytesIO()
+    await photos[0].download(image_bytes)
+
+    bills = await decode_qr_bill(image_bytes)
+    if len(bills) < 1:
+        await bot.send_message(message.from_user.id, 'Невозможно декодировать QR код.')
+        return
+
+    await bot.send_message(message.from_user.id, 'Выполняется поиск чека...')
+    data = await get_bill_data(bills[0])
+    if data is None:
+        await bot.send_message(message.from_user.id, 'Неудалось найти чек.')
+        return
+
+    items = data['document']['receipt']['items']
+    message_text = ''
+    for item in items:
+        name, quantity, sum = item['name'], item['quantity'], item['sum']
+        message_text += f'\'{name}\' x {quantity} == {sum / 100.0}\n'
+    await bot.send_message(message.from_user.id, message_text)
 
 
 if __name__ == '__main__':
