@@ -35,6 +35,8 @@ class ChatState:
     idle = "idle"
     gather_places = "gather_places"
     poll = "poll"
+    making_order = "making_order"
+    waiting_order = "waiting_order"
 
 
 class UserState:
@@ -53,7 +55,7 @@ async def if_start_in_private(message: types.Message):
 
 
 # None is default value of chat_state, todo initialize with idle
-@dp.message_handler(commands=['start'], chat_state=[ChatState.idle, None])
+@dp.message_handler(commands=['start'], chat_type='group', chat_state=[ChatState.idle, None])
 async def if_start(message: types.Message):
     order_info = OrderInfo.from_message(message)
     await storage.set_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order_info)})
@@ -70,7 +72,7 @@ async def if_start(message: types.Message):
     # await bot.send_message(message.from_user.id, message_text)
 
 
-@dp.message_handler(commands=['addPlace'], chat_state=ChatState.gather_places)
+@dp.message_handler(commands=['addPlace'], chat_type='group', chat_state=ChatState.gather_places)
 async def if_add_place(message: types.Message):
     parts = message.text.split(' ', maxsplit=1)
     if len(parts) < 2:
@@ -87,7 +89,7 @@ async def if_add_place(message: types.Message):
     await bot.send_message(message.chat.id, message_text)
 
 
-@dp.message_handler(commands=['startPoll'], is_order_owner=True, chat_state=ChatState.gather_places)
+@dp.message_handler(commands=['startPoll'], chat_type='group', is_order_owner=True, chat_state=ChatState.gather_places)
 async def if_start_poll(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
@@ -100,7 +102,7 @@ async def if_start_poll(message: types.Message):
     await storage.update_data(chat=message.chat.id, data={'poll_message_id': sent_message.message_id})
 
 
-@dp.message_handler(commands=['showPlace'], is_order_owner=True, chat_state=ChatState.poll)
+@dp.message_handler(commands=['showPlace'], chat_type='group', is_order_owner=True, chat_state=ChatState.poll)
 async def if_show_place(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
 
@@ -125,9 +127,27 @@ async def if_show_place(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     data.pop('poll_message_id')
     await storage.update_data(chat=message.chat.id, data=data)
+    await storage.set_state(chat=message.chat.id, state=ChatState.making_order)
 
 
-@dp.message_handler(commands='cancel', is_order_owner=True, chat_state_not=[ChatState.idle, None])
+@dp.message_handler(commands='finishOrder', chat_type='group', is_order_owner=True, chat_state=[ChatState.making_order])
+async def if_cancel(message: types.Message):
+    message_text = ''
+    data = await storage.get_data(chat=message.chat.id)
+    participants = data['order']['participants']
+    for user in participants:
+        user_chat = await bot.get_chat(chat_id=user)
+        # todo check state
+        user_data = await storage.get_data(user=user)
+        message_text += f'Пользователь \'{user_chat.full_name}\' заказал:\n'
+        for i, dish in enumerate(user_data['dishes']):
+            message_text += f'{i+1}. {dish}\n'
+        message_text += '\n'
+    await bot.send_message(message.from_user.id, message_text)
+    await storage.set_state(chat=message.chat.id, state=ChatState.waiting_order)
+
+
+@dp.message_handler(commands='cancel', chat_type='group', is_order_owner=True, chat_state_not=[ChatState.idle, None])
 async def if_cancel(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     if 'order' in data:
@@ -212,8 +232,8 @@ async def if_add_in_private(message: types.Message):
     await bot.send_message(message.from_user.id, message_text)
 
 
-@dp.message_handler(commands=['status'], chat_type='private', is_order_owner=True,  state='*', user_state=UserState.making_order)
-async def if_add_in_private(message: types.Message):
+@dp.message_handler(commands=['status'], chat_type='private', is_order_owner=True,  state='*', user_state=[UserState.making_order, UserState.finish_order])
+async def if_status_in_private(message: types.Message):
     data = await storage.get_data(user=message.from_user.id)
     chat_id = data['order_chat_id']
     data = await storage.get_data(chat=chat_id)
