@@ -22,7 +22,7 @@ class FirebaseStorage(BaseStorage):
         return document
 
     async def close(self):
-        await self.client.close()
+        pass
 
     async def wait_closed(self):
         pass
@@ -57,6 +57,8 @@ class FirebaseStorage(BaseStorage):
                        data: typing.Dict = None):
         document = self.resolve_document('data', chat, user)
         document.set(data)
+        print(data)
+
 
     async def get_data(self, *,
                        chat: typing.Union[str, int, None] = None,
@@ -72,7 +74,8 @@ class FirebaseStorage(BaseStorage):
         if data is None:
             data = {}
         document = self.resolve_document('data', chat, user)
-        new_data = document.document.get().to_dict().update(data, **kwargs)
+        new_data = document.get().to_dict()
+        new_data.update(data, **kwargs)
         document.set(new_data)
 
     async def reset_data(self, *,
@@ -102,7 +105,8 @@ class FirebaseStorage(BaseStorage):
         if bucket is None:
             bucket = {}
         document = self.resolve_document('bucket', chat, user)
-        new_bucket = document.document.get().to_dict().update(bucket, **kwargs)
+        new_bucket = document.get().to_dict()
+        new_bucket.update(bucket, **kwargs)
         document.set(new_bucket)
 
     async def reset_bucket(self, *,
