@@ -29,13 +29,9 @@ class UserStateFilter(AbstractFilter):
         if user_state is not None and user_state_not is not None:
             raise ValueError("user_state and user_state_not cannot be not None simultaneously")
 
-        print(user_state, user_state_not)
-
         self.dispatcher = dispatcher
         self.negate = user_state is None
         self.chat_states_to_check = wrap_list(user_state if not self.negate else user_state_not)
-
-        print(self.chat_states_to_check)
 
     @classmethod
     def validate(cls, full_config):
@@ -58,8 +54,6 @@ class UserStateFilter(AbstractFilter):
 
         current_state = await self.dispatcher.storage.get_state(user=user_id)
 
-        print(current_state, self.chat_states_to_check)
-
         if current_state in self.chat_states_to_check and self.negate:
             return False
 
@@ -78,8 +72,6 @@ class ChatStateFilter(AbstractFilter):
 
         if chat_state is not None and chat_state_not is not None:
             raise ValueError("chat_state and chat_state_not cannot be not None simultaneously")
-
-        print(chat_state, chat_state_not)
 
         self.dispatcher = dispatcher
         self.negate = chat_state is None
@@ -139,7 +131,13 @@ class OrderOwnerFilter(AbstractFilter):
         user_id = obj.from_user.id
         chat_id = message.chat.id
 
-        data = await self.dispatcher.storage.get_data(chat=chat_id, user=None)
+        if message.chat.type == 'private':
+            data = await self.dispatcher.storage.get_data(user=user_id)
+            if 'order_chat_id' not in data:
+                return False
+            chat_id = data['order_chat_id']
+
+        data = await self.dispatcher.storage.get_data(chat=chat_id)
 
         owner_user_id = data['order']['owner_user_id']
         return user_id == owner_user_id
