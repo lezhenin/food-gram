@@ -10,6 +10,7 @@ from aiogram.utils import executor
 
 from orderinfo import OrderInfo
 from extensions.filters import OrderOwnerFilter, UserStateFilter, ChatStateFilter, ChatTypeFilter
+from extensions.firebase import FirebaseStorage
 
 from utils.bill import decode_qr_bill, get_bill_data
 
@@ -21,6 +22,7 @@ API_TOKEN = '1056772125:AAFQrxSVgSzMO3Ihc9Rb3n4Uqm9pYZAa5NQ'
 bot = Bot(token=API_TOKEN)
 bot.parse_mode = 'HTML'
 
+# storage = FirebaseStorage('./credentials.json')
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
@@ -128,6 +130,12 @@ async def if_show_place(message: types.Message):
 
 @dp.message_handler(commands='cancel', is_order_owner=True, chat_state_not=[ChatState.idle, None])
 async def if_cancel(message: types.Message):
+    data = await storage.get_data(chat=message.chat.id)
+    if 'order' in data:
+        participants = data['order']['participants']
+        for user in participants:
+            await storage.reset_state(user=user, with_data=True)
+
     await storage.reset_state(chat=message.chat.id, with_data=True)
 
     message_text = "Текущий заказ отменен."
