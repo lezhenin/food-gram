@@ -94,6 +94,26 @@ async def if_start_poll(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
 
+    if len(data['order']['places']) < 1:
+        return
+
+    if len(data['order']['places']) == 1:
+        winner_option = data['order']['places']
+        inline_button_text = "Принять участие в формировании заказа"
+        inline_button_data = str(message.chat.id)
+        keyboard_markup = types.InlineKeyboardMarkup()
+        keyboard_markup.add(
+            types.InlineKeyboardButton(inline_button_text, callback_data=inline_button_data)
+        )
+        message_text = f"Вариант " + str(winner_option[0]) + " набрал наибольшее количество голосов."
+        await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
+        data = await storage.get_data(chat=message.chat.id)
+        data.pop('poll_message_id')
+        await storage.update_data(chat=message.chat.id, data=data)
+        await storage.set_state(chat=message.chat.id, state=ChatState.making_order)
+
+    return
+
     await storage.set_state(chat=message.chat.id, state=ChatState.poll)
 
     question = "Из какого места заказать еду?"
@@ -121,7 +141,7 @@ async def if_show_place(message: types.Message):
         types.InlineKeyboardButton(inline_button_text, callback_data=inline_button_data)
     )
 
-    message_text = f"Вариант \"{winner_option.text}\" набраил наибольшее количество голосов."
+    message_text = f"Вариант \"{winner_option.text}\" набрал наибольшее количество голосов."
     await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
 
     data = await storage.get_data(chat=message.chat.id)
@@ -278,6 +298,41 @@ async def handle_docs_photo(message: types.Message):
         name, quantity, sum = item['name'], item['quantity'], item['sum']
         message_text += f'\'{name}\' x {quantity} == {sum / 100.0}\n'
     await bot.send_message(message.from_user.id, message_text)
+
+
+
+@dp.message_handler(commands=['help'])
+async def help_command(message):
+    help_message = "Добавь меня в беседу. Потом:\n" \
+                   "/start - запуск заказа. Нажавший - ответственный\n" \
+                   "/addPlace - добавление места заказа\n" \
+                   "/startPoll - выбор места заказа (после добавления всех мест)\n" \
+                   "/showPlace - победившее место\n" \
+                   "/cancel - отмена заказа\n" \
+                   "После выбора места можно делать заказ в личном диалоге с ботом:\n" \
+                   "/add - добавить пункт заказа\n" \
+                   "/change - изменить пункт заказа\n" \
+                   "/delete - убрать пункт заказа\n" \
+                   "/list - вывод пунктов заказа\n" \
+                   "/finish - закончить формирование заказа\n" \
+                   "/finishOrder - ответственному - закончить формирование заказа\n"
+    await bot.send_message(message.chat.id, help_message)
+
+
+@dp.message_handler(commands=['change'], regexp='/change \\d+ \\w+', chat_type='private', state='*', user_state=UserState.making_order)
+async def if_add_in_private(message: types.Message):
+    parts = message.text.split(' ', maxsplit=2)
+    print(parts)
+    if len(parts) < 3:
+        return
+    index = int(parts[1])
+    data = await storage.get_data(user=message.from_user.id)
+    print(data)
+    dishes = data.get('dishes', [])
+    if index - 1 < len(dishes):
+        dishes[index-1]=parts[2];
+        await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
+
 
 
 if __name__ == '__main__':
