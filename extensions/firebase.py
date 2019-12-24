@@ -114,3 +114,17 @@ class FirebaseStorage(BaseStorage):
                            user: typing.Union[str, int, None] = None):
         document = self.resolve_document('bucket', chat, user)
         document.delete()
+
+    def get_dishes(self, user):
+        inline_dishes = []
+        for i in self.client.collection('stats').get():
+            for j in filter(lambda x: x['username'] == user, list(i.get('participants'))):
+                inline_dishes.extend(j['dishes'])
+        return list(set(inline_dishes))
+
+    def get_places(self, user):
+        inline_places = []
+        for i in self.client.collection('stats').get():
+            if len(list(filter(lambda x: x['username'] == user, list(i.get('participants'))))) > 0:
+                inline_places.extend(i.get('suggested_places'))
+        return list(set(inline_places))
