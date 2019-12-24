@@ -10,8 +10,13 @@ class OrderInfo:
     chat_id: int
     owner_user_id: int
     owner_user_name: int
+    chosen_place: str
     places: typing.List[str]
     participants: typing.List[int]
+    date_started: str
+    date_finished: str
+    date_delivered: str
+    price: int
 
     def add_place(self, new_place):
         if new_place not in self.places:
@@ -30,6 +35,11 @@ class OrderInfo:
             chat_id=message.chat.id,
             owner_user_id=message.from_user.id,
             owner_user_name=message.from_user.first_name,
+            chosen_place='',
             places=[],
-            participants=[]
+            participants=[],
+            date_started='',
+            date_finished='',
+            date_delivered='',
+            price=''
         )
