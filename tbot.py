@@ -64,7 +64,14 @@ async def if_start(message: types.Message):
     message_text = "Привет, будем заказывать\n" \
                    "<b>%s</b> - инициатор заказа, будет иметь основные права и обязанности. " \
                    "Пишите места командой" % message.from_user.first_name
-    await bot.send_message(message.chat.id, message_text)
+    
+    inline_button_text = "Предложить место из списка"
+    keyboard_markup = types.InlineKeyboardMarkup()
+    keyboard_markup.add(
+        types.InlineKeyboardButton(inline_button_text, switch_inline_query_current_chat= '/addPlace ')
+    )
+    
+    await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
 
     # информируем главного что он главный
     # message_text = "Привет, %s! Ты решил сделать заказ в чате %s \n 😎 " \
@@ -189,13 +196,24 @@ async def inline_kb_answer_callback_handler(query: types.CallbackQuery):
     order = OrderInfo(**data['order'])
     order.add_participant(query.from_user.id)
 
+    # TODO: get inline_dishes from database for every user
+    inline_dishes = ['Пицца', 'Блинчик', 'Ролл', 'Суши']
+    await storage.set_data(user=query.from_user.id, data={'inline_dishes': inline_dishes})
+
     await storage.update_data(chat=chat.id, data={'order': OrderInfo.as_dict(order)})
 
     await storage.set_state(user=query.from_user.id, state=UserState.making_order)
     await storage.update_data(user=query.from_user.id, data={'order_chat_id': chat.id})
 
     message_text = f"Вы приняли участие в формирование заказа, созданного в \"{chat.title}\""
-    await bot.send_message(query.from_user.id, message_text)
+    
+    inline_button_text = "Добавить блюдо из списка"
+    keyboard_markup = types.InlineKeyboardMarkup()
+    keyboard_markup.add(
+        types.InlineKeyboardButton(inline_button_text, switch_inline_query_current_chat= '/add ')
+    )
+    
+    await bot.send_message(query.from_user.id, message_text, reply_markup=keyboard_markup)
 
 
 @dp.message_handler(commands=['add'], chat_type='private', state='*', user_state=UserState.making_order)
@@ -336,22 +354,44 @@ async def if_add_in_private(message: types.Message):
 		
 # inline mode
 # DON'T FORGET to write "/setinline" to BotFather to change inline queries status.
-@dp.inline_handler()
-async def inline_echo(inline_query: InlineQuery):
-# todo: add all commands to list, add database query to get restaurants and food
-    lst = {'/start':'Начать заказ', '/eat': 'Выбрать блюдо', '/bill': 'Загрузить чек', '/makeorder':'Сделать заказ'}
+@dp.inline_handler(lambda query: query.query == '/add', state=UserState.making_order)
+async def inline_dishes(inline_query):
+#    data = await storage.get_data(user=inline_query.from_user.id)
+#    print(data)
+    parts = inline_query.query.split(' ', maxsplit=1)
+    data = await storage.get_data(user=inline_query.from_user.id)
+    lst = data.get('inline_dishes', [])
     inpLst = []
-    for i in lst.keys():
-        if i.startswith(inline_query.query):
-            inpLst.append(
-                InlineQueryResultArticle(
-                    id=hashlib.md5(i.encode()).hexdigest(),
-                    title=f'{i!r}',
-                    input_message_content=InputTextMessageContent(i),
-                    description = lst.get(i)
-                )
-            )
-    # cache_time=1 for testing (default is 300s or 5m)
+    if len(parts) < 2:
+        inpLst = list(map(lambda x: InlineQueryResultArticle(
+            id=hashlib.md5(x.encode()).hexdigest(),
+            title = x,
+            input_message_content=InputTextMessageContent('/add ' + x)
+            ), lst))
+    else:
+        inpLst = list(map(lambda x: InlineQueryResultArticle(
+            id=hashlib.md5(x.encode()).hexdigest(),
+            title = x,
+            input_message_content=InputTextMessageContent('/add ' + x)
+            ), list(filter(lambda x: x.startswith(parts[1]), lst))))
+    await bot.answer_inline_query(inline_query.id, results=inpLst, cache_time=1)
+    
+@dp.inline_handler(lambda query: query.query == '/addPlace')
+async def inline_cafe(inline_query):
+    parts = inline_query.query.split(' ', maxsplit=1)
+    lst = {'Теремок', 'Бургер Кинг', 'Макдоналс', 'Две палочки'}
+    if len(parts) < 2:
+        inpLst = list(map(lambda x: InlineQueryResultArticle(
+            id=hashlib.md5(x.encode()).hexdigest(),
+            title = x,
+            input_message_content=InputTextMessageContent('/addPlace ' + x)
+            ), lst))
+    else:
+        inpLst = list(map(lambda x: InlineQueryResultArticle(
+            id=hashlib.md5(x.encode()).hexdigest(),
+            title = x,
+            input_message_content=InputTextMessageContent('/addPlace ' + x)
+            ), list(filter(lambda x: x.startswith(parts[1]), lst))))
     await bot.answer_inline_query(inline_query.id, results=inpLst, cache_time=1)
 
 
