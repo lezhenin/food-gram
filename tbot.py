@@ -137,7 +137,7 @@ async def if_show_place(message: types.Message):
     # [print(opt)]
     poll.options.sort(key=lambda o: o.voter_count, reverse=True)
     winner_option = poll.options[0]
-    order.chosen_place = winner_option
+    order.chosen_place = winner_option.text
 
     inline_button_text = "Принять участие в формировании заказа"
     inline_button_data = str(message.chat.id)

@@ -59,7 +59,6 @@ class FirebaseStorage(BaseStorage):
         document.set(data)
         print(data)
 
-
     async def get_data(self, *,
                        chat: typing.Union[str, int, None] = None,
                        user: typing.Union[str, int, None] = None,
@@ -114,3 +113,7 @@ class FirebaseStorage(BaseStorage):
                            user: typing.Union[str, int, None] = None):
         document = self.resolve_document('bucket', chat, user)
         document.delete()
+
+    async def add_stats(self, stats: typing.Dict):
+        collection = self.client.collection('stats')
+        collection.add(stats)
