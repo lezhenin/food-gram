@@ -111,8 +111,7 @@ async def if_start_poll(message: types.Message):
         data.pop('poll_message_id')
         await storage.update_data(chat=message.chat.id, data=data)
         await storage.set_state(chat=message.chat.id, state=ChatState.making_order)
-
-    return
+        return
 
     await storage.set_state(chat=message.chat.id, state=ChatState.poll)
 
@@ -144,14 +143,16 @@ async def if_show_place(message: types.Message):
     message_text = f"Вариант \"{winner_option.text}\" набрал наибольшее количество голосов."
     await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
 
-    data = await storage.get_data(chat=message.chat.id)
-    data.pop('poll_message_id')
-    await storage.update_data(chat=message.chat.id, data=data)
     await storage.set_state(chat=message.chat.id, state=ChatState.making_order)
+
+    data = await storage.get_data(chat=message.chat.id)
+    if 'poll_message_id' in data:
+        data.pop('poll_message_id')
+        await storage.set_data(chat=message.chat.id, data=data)
 
 
 @dp.message_handler(commands='finishOrder', chat_type='group', is_order_owner=True, chat_state=[ChatState.making_order])
-async def if_cancel(message: types.Message):
+async def if_finish_order(message: types.Message):
     message_text = ''
     data = await storage.get_data(chat=message.chat.id)
     participants = data['order']['participants']
@@ -300,8 +301,7 @@ async def handle_docs_photo(message: types.Message):
     await bot.send_message(message.from_user.id, message_text)
 
 
-
-@dp.message_handler(commands=['help'])
+@dp.message_handler(commands=['help'], state='*')
 async def help_command(message):
     help_message = "Добавь меня в беседу. Потом:\n" \
                    "/start - запуск заказа. Нажавший - ответственный\n" \
@@ -330,9 +330,8 @@ async def if_add_in_private(message: types.Message):
     print(data)
     dishes = data.get('dishes', [])
     if index - 1 < len(dishes):
-        dishes[index-1]=parts[2];
+        dishes[index-1] = parts[2]
         await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
-
 
 
 if __name__ == '__main__':
