@@ -1,10 +1,11 @@
 import io
 import logging
-
+import hashlib
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineQuery, InputTextMessageContent, InlineQueryResultArticle
 from aiogram.utils import executor
 
 from orderinfo import OrderInfo
@@ -21,7 +22,7 @@ API_TOKEN = '1056772125:AAFQrxSVgSzMO3Ihc9Rb3n4Uqm9pYZAa5NQ'
 bot = Bot(token=API_TOKEN)
 bot.parse_mode = 'HTML'
 
-# storage = FirebaseStorage('./credentials.json')
+db_storage = FirebaseStorage('./credentials.json')
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
@@ -196,10 +197,6 @@ async def inline_kb_answer_callback_handler(query: types.CallbackQuery):
     order = OrderInfo(**data['order'])
     order.add_participant(query.from_user.id)
 
-    # TODO: get inline_dishes from database for every user
-    inline_dishes = ['Пицца', 'Блинчик', 'Ролл', 'Суши']
-    await storage.set_data(user=query.from_user.id, data={'inline_dishes': inline_dishes})
-
     await storage.update_data(chat=chat.id, data={'order': OrderInfo.as_dict(order)})
 
     await storage.set_state(user=query.from_user.id, state=UserState.making_order)
@@ -354,13 +351,10 @@ async def if_add_in_private(message: types.Message):
 		
 # inline mode
 # DON'T FORGET to write "/setinline" to BotFather to change inline queries status.
-@dp.inline_handler(lambda query: query.query == '/add', state=UserState.making_order)
+@dp.inline_handler(lambda query: query.query.startswith('/add'), state=UserState.making_order)
 async def inline_dishes(inline_query):
-#    data = await storage.get_data(user=inline_query.from_user.id)
-#    print(data)
     parts = inline_query.query.split(' ', maxsplit=1)
-    data = await storage.get_data(user=inline_query.from_user.id)
-    lst = data.get('inline_dishes', [])
+    lst = db_storage.get_dishes(inline_query.from_user.username)
     inpLst = []
     if len(parts) < 2:
         inpLst = list(map(lambda x: InlineQueryResultArticle(
@@ -373,13 +367,13 @@ async def inline_dishes(inline_query):
             id=hashlib.md5(x.encode()).hexdigest(),
             title = x,
             input_message_content=InputTextMessageContent('/add ' + x)
-            ), list(filter(lambda x: x.startswith(parts[1]), lst))))
+            ), list(filter(lambda x: x.lower().startswith(parts[1].lower()), lst))))
     await bot.answer_inline_query(inline_query.id, results=inpLst, cache_time=1)
     
-@dp.inline_handler(lambda query: query.query == '/addPlace')
+@dp.inline_handler(lambda query: query.query.startswith('/addPlace'))
 async def inline_cafe(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
-    lst = {'Теремок', 'Бургер Кинг', 'Макдоналс', 'Две палочки'}
+    lst = db_storage.get_places(inline_query.from_user.username)
     if len(parts) < 2:
         inpLst = list(map(lambda x: InlineQueryResultArticle(
             id=hashlib.md5(x.encode()).hexdigest(),
@@ -391,7 +385,7 @@ async def inline_cafe(inline_query):
             id=hashlib.md5(x.encode()).hexdigest(),
             title = x,
             input_message_content=InputTextMessageContent('/addPlace ' + x)
-            ), list(filter(lambda x: x.startswith(parts[1]), lst))))
+            ), list(filter(lambda x: x.lower().startswith(parts[1].lower()), lst))))
     await bot.answer_inline_query(inline_query.id, results=inpLst, cache_time=1)
 
 
