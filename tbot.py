@@ -109,7 +109,8 @@ async def if_start_poll(message: types.Message):
         message_text = f"Вариант " + str(winner_option[0]) + " набрал наибольшее количество голосов."
         await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
         data = await storage.get_data(chat=message.chat.id)
-        data.pop('poll_message_id')
+        order = OrderInfo(**data['order'])
+        order.chosen_place = winner_option
         await storage.update_data(chat=message.chat.id, data=data)
         await storage.set_state(chat=message.chat.id, state=ChatState.making_order)
         return
@@ -125,6 +126,8 @@ async def if_start_poll(message: types.Message):
 @dp.message_handler(commands=['showPlace'], chat_type='group', is_order_owner=True, chat_state=ChatState.poll)
 async def if_show_place(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
+    order = OrderInfo(**data['order'])
+    order.chosen_place = winer_option
 
     poll_message_id = data['poll_message_id']
     poll = await bot.stop_poll(message.chat.id, poll_message_id)
@@ -154,12 +157,14 @@ async def if_show_place(message: types.Message):
 
 @dp.message_handler(commands='finishOrder', chat_type='group', is_order_owner=True, chat_state=[ChatState.making_order])
 async def if_finish_order(message: types.Message):
-    message_text = ''
+
     data = await storage.get_data(chat=message.chat.id)
-    print(2)
-    participants = data['order']['participants']
-    for user in participants:
-        print(user)
+    order = OrderInfo(**data['order'])
+    order.date_finished = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
+
+    message_text = ''
+    for user in order.participants:
         user_chat = await bot.get_chat(chat_id=user)
         # todo check state
         user_data = await storage.get_data(user=user)
@@ -168,7 +173,27 @@ async def if_finish_order(message: types.Message):
             message_text += f'{i+1}. {dish}\n'
         message_text += '\n'
     await bot.send_message(message.from_user.id, message_text)
+
     await storage.set_state(chat=message.chat.id, state=ChatState.waiting_order)
+
+
+@dp.message_handler(commands='closeOrder', chat_type='group', is_order_owner=True, chat_state=ChatState.waiting_order)
+async def if_close_order(message: types.Message):
+    data = await storage.get_data(chat=message.chat.id)
+    order = OrderInfo(**data['order'])
+    order.date_delivered = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
+    # todo notify all
+
+    stats = await collect_data(bot, storage, message.chat.id)
+    await storage.add_stats(stats)
+
+    for user in order.participants:
+        await storage.reset_state(user=user, with_data=True)
+    await storage.reset_state(chat=message.chat.id, with_data=True)
+
+    message_text = "Текущий заказ завершен."
+    await bot.send_message(message.chat.id, message_text)
 
 
 @dp.message_handler(commands='cancel', chat_type='group', is_order_owner=True, chat_state_not=[ChatState.idle, None])
@@ -268,21 +293,14 @@ async def if_status_in_private(message: types.Message):
         if state == UserState.making_order:
             message_text += f'Пользователь \'{user_chat.full_name}\' формирует заказ\n'
         elif state == UserState.finish_order:
-
             message_text += f'Пользователь \'{user_chat.full_name}\' завершил формирование заказа\n'
-            data = await storage.get_data(user=message.from_user.id)
-            dishes = data.get('dishes', [])
-            dishes = [str(i + 1) + '. ' + dishes[i] for i in range(len(dishes))]
-            message_text += 'Его блюда\n' + '\n'.join(dishes)
-            #await bot.send_message(message.from_user.id, message_text)
 
     await bot.send_message(message.from_user.id, message_text)
 
 
-items = 0
-
 @dp.message_handler(content_types=['photo'])
 async def handle_docs_photo(message: types.Message):
+
     photos = message.photo
     if len(photos) < 1:
         return
@@ -300,28 +318,13 @@ async def handle_docs_photo(message: types.Message):
     if data is None:
         await bot.send_message(message.from_user.id, 'Не удалось найти чек.')
         return
-    global items
+
     items = data['document']['receipt']['items']
     message_text = ''
     for item in items:
         name, quantity, sum = item['name'], item['quantity'], item['sum']
         message_text += f'\'{name}\' x {quantity} == {sum / 100.0}\n'
     await bot.send_message(message.from_user.id, message_text)
-
-
-@dp.message_handler(
-    commands=['myitems'], regexp='/myitems \\d+\\s*', chat_type='group', state='*')
-async def bill_items(message: types.Message):
-    global items
-    parts = message.text.split(' ')
-    if len(parts) < 2:
-        return
-    message_text = message.from_user.first_name + " заказал:\n"
-    for i in parts[1:]:
-        i = int(i)
-        message_text += f'\'{items[i]["name"]}\' x {items[i]["quantity"]} == {items[i]["sum"] / 100.0}\n'
-        print()
-    await bot.send_message(message.chat.id, message_text)
 
 
 @dp.message_handler(commands=['help'], state='*')
