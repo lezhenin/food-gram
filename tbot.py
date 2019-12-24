@@ -1,6 +1,8 @@
 import io
 import logging
 
+from datetime import datetime
+
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -58,6 +60,7 @@ async def if_start_in_private(message: types.Message):
 @dp.message_handler(commands=['start'], chat_type='group', chat_state=[ChatState.idle, None])
 async def if_start(message: types.Message):
     order_info = OrderInfo.from_message(message)
+    order_info.date_started = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     await storage.set_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order_info)})
     await storage.set_state(chat=message.chat.id, state=ChatState.gather_places)
 
@@ -153,10 +156,12 @@ async def if_show_place(message: types.Message):
 
 @dp.message_handler(commands='finishOrder', chat_type='group', is_order_owner=True, chat_state=[ChatState.making_order])
 async def if_finish_order(message: types.Message):
-    message_text = ''
     data = await storage.get_data(chat=message.chat.id)
-    participants = data['order']['participants']
-    for user in participants:
+    order = OrderInfo(**data['order'])
+    order.date_finished = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    message_text = ''
+    for user in order.participants:
         user_chat = await bot.get_chat(chat_id=user)
         # todo check state
         user_data = await storage.get_data(user=user)
@@ -165,6 +170,7 @@ async def if_finish_order(message: types.Message):
             message_text += f'{i+1}. {dish}\n'
         message_text += '\n'
     await bot.send_message(message.from_user.id, message_text)
+
     await storage.set_state(chat=message.chat.id, state=ChatState.waiting_order)
 
 
