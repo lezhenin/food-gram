@@ -37,6 +37,7 @@ class ChatState:
     poll = "poll"
     making_order = "making_order"
     waiting_order = "waiting_order"
+    finish_order = "finish_order"
 
 
 class UserState:
@@ -143,15 +144,16 @@ async def if_show_place(message: types.Message):
     message_text = f"Вариант \"{winner_option.text}\" набрал наибольшее количество голосов."
     await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
 
-    data = await storage.get_data(chat=message.chat.id)
-    data.pop('poll_message_id')
-    await storage.update_data(chat=message.chat.id, data=data)
     await storage.set_state(chat=message.chat.id, state=ChatState.making_order)
+
+    data = await storage.get_data(chat=message.chat.id)
+    if 'poll_message_id' in data:
+        data.pop('poll_message_id')
+        await storage.set_data(chat=message.chat.id, data=data)
 
 
 @dp.message_handler(commands='finishOrder', chat_type='group', is_order_owner=True, chat_state=[ChatState.making_order])
-async def if_cancel(message: types.Message):
-    print(1)
+async def if_finish_order(message: types.Message):
     message_text = ''
     data = await storage.get_data(chat=message.chat.id)
     print(2)
@@ -277,7 +279,7 @@ async def if_status_in_private(message: types.Message):
     await bot.send_message(message.from_user.id, message_text)
 
 
-items=0;
+items = 0
 
 @dp.message_handler(content_types=['photo'])
 async def handle_docs_photo(message: types.Message):
@@ -322,9 +324,7 @@ async def bill_items(message: types.Message):
     await bot.send_message(message.chat.id, message_text)
 
 
-
-
-@dp.message_handler(commands=['help'])
+@dp.message_handler(commands=['help'], state='*')
 async def help_command(message):
     help_message = "Добавь меня в беседу. Потом:\n" \
                    "/start - запуск заказа. Нажавший - ответственный\n" \
@@ -339,7 +339,8 @@ async def help_command(message):
                    "/list - вывод пунктов заказа\n" \
                    "/finish - закончить формирование заказа\n" \
                    "/status - ответственному - проверить состояние заказа\n" \
-                   "/finishOrder - ответственному - закончить формирование заказа\n"
+                   "/finishOrder - ответственному - закончить формирование заказа\n" \
+                   "/endOrder - ответственному - заказ выполнен\n"
     await bot.send_message(message.chat.id, help_message)
 
 
@@ -350,10 +351,23 @@ async def if_add_in_private(message: types.Message):
         return
     index = int(parts[1])
     data = await storage.get_data(user=message.from_user.id)
+
     dishes = data.get('dishes', [])
     if index - 1 < len(dishes):
-        dishes[index-1]=parts[2];
+        dishes[index-1] = parts[2]
         await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
+
+
+@dp.message_handler(commands='endOrder', chat_type='group', is_order_owner=True, chat_state=[ChatState.making_order])
+async def if_finish_order(message: types.Message):
+    message_text = 'Заказ беседы ' + message.chat.first_name +' выполнен.'
+    data = await storage.get_data(chat=message.chat.id)
+    participants = data['order']['participants']
+    for user in participants:
+        print(user)
+        user_chat = await bot.get_chat(chat_id=user)
+        await bot.send_message(user_chat, message_text)
+    await storage.set_state(chat=message.chat.id, state=ChatState.finish_order)
 
 
 if __name__ == '__main__':
