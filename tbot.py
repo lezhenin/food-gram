@@ -1,6 +1,8 @@
 import io
 import logging
 
+from datetime import datetime
+
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -12,6 +14,7 @@ from extensions.filters import OrderOwnerFilter, UserStateFilter, ChatStateFilte
 from extensions.firebase import FirebaseStorage
 
 from utils.bill import decode_qr_bill, get_bill_data
+from utils.stats import collect_data
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -21,8 +24,8 @@ API_TOKEN = '1056772125:AAFQrxSVgSzMO3Ihc9Rb3n4Uqm9pYZAa5NQ'
 bot = Bot(token=API_TOKEN)
 bot.parse_mode = 'HTML'
 
-# storage = FirebaseStorage('./credentials.json')
-storage = MemoryStorage()
+storage = FirebaseStorage('./testcred.json')
+# storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
 dp.filters_factory.bind(OrderOwnerFilter)
@@ -37,7 +40,6 @@ class ChatState:
     poll = "poll"
     making_order = "making_order"
     waiting_order = "waiting_order"
-    finish_order = "finish_order"
 
 
 class UserState:
@@ -59,6 +61,7 @@ async def if_start_in_private(message: types.Message):
 @dp.message_handler(commands=['start'], chat_type='group', chat_state=[ChatState.idle, None])
 async def if_start(message: types.Message):
     order_info = OrderInfo.from_message(message)
+    order_info.date_started = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     await storage.set_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order_info)})
     await storage.set_state(chat=message.chat.id, state=ChatState.gather_places)
 
@@ -127,7 +130,6 @@ async def if_start_poll(message: types.Message):
 async def if_show_place(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
-    order.chosen_place = winer_option
 
     poll_message_id = data['poll_message_id']
     poll = await bot.stop_poll(message.chat.id, poll_message_id)
@@ -135,6 +137,7 @@ async def if_show_place(message: types.Message):
     # [print(opt)]
     poll.options.sort(key=lambda o: o.voter_count, reverse=True)
     winner_option = poll.options[0]
+    order.chosen_place = winner_option
 
     inline_button_text = "Принять участие в формировании заказа"
     inline_button_data = str(message.chat.id)
@@ -298,7 +301,7 @@ async def if_status_in_private(message: types.Message):
     await bot.send_message(message.from_user.id, message_text)
 
 
-@dp.message_handler(content_types=['photo'])
+@dp.message_handler(content_types=['photo'], state="*")
 async def handle_docs_photo(message: types.Message):
 
     photos = message.photo
@@ -325,6 +328,12 @@ async def handle_docs_photo(message: types.Message):
         name, quantity, sum = item['name'], item['quantity'], item['sum']
         message_text += f'\'{name}\' x {quantity} == {sum / 100.0}\n'
     await bot.send_message(message.from_user.id, message_text)
+    tmp = await storage.get_data(user=message.from_user.id)
+    order = OrderInfo(**tmp['order'])
+    order.price = data['document']['receipt']['totalSum']
+    print(data['document']['receipt']['items']['totalSum'])
+    await storage.update_data(chat=message.chat.id, data=data)
+
 
 
 @dp.message_handler(commands=['help'], state='*')
@@ -333,7 +342,7 @@ async def help_command(message):
                    "/start - запуск заказа. Нажавший - ответственный\n" \
                    "/addPlace - добавление места заказа\n" \
                    "/startPoll - выбор места заказа (после добавления всех мест)\n" \
-                   "/showPlace - победившее место + принять участие в заказе\n" \
+                   "/showPlace - победившее место\n" \
                    "/cancel - отмена заказа\n" \
                    "После выбора места можно делать заказ в личном диалоге с ботом:\n" \
                    "/add - добавить пункт заказа\n" \
@@ -342,8 +351,8 @@ async def help_command(message):
                    "/list - вывод пунктов заказа\n" \
                    "/finish - закончить формирование заказа\n" \
                    "/status - ответственному - проверить состояние заказа\n" \
-                   "/finishOrder - ответственному - закончить формирование заказа\n" \
-                   "/endOrder - ответственному - заказ выполнен\n"
+                    "/finishOrder - ответственному - закончить формирование заказа\n" \
+                    "/endOrder - ответственному - заказ выполнен\n"
     await bot.send_message(message.chat.id, help_message)
 
 
@@ -359,18 +368,6 @@ async def if_add_in_private(message: types.Message):
     if index - 1 < len(dishes):
         dishes[index-1] = parts[2]
         await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
-
-
-@dp.message_handler(commands='endOrder', chat_type='group', is_order_owner=True, chat_state=[ChatState.making_order])
-async def if_finish_order(message: types.Message):
-    message_text = 'Заказ беседы ' + message.chat.first_name +' выполнен.'
-    data = await storage.get_data(chat=message.chat.id)
-    participants = data['order']['participants']
-    for user in participants:
-        print(user)
-        user_chat = await bot.get_chat(chat_id=user)
-        await bot.send_message(user_chat, message_text)
-    await storage.set_state(chat=message.chat.id, state=ChatState.finish_order)
 
 
 if __name__ == '__main__':
