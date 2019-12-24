@@ -1,5 +1,6 @@
 from orderinfo import OrderInfo
 
+
 async def collect_data(bot, storage, chat_id):
     chat_data = await storage.get_data(chat=chat_id)
     order = OrderInfo(**chat_data['order'])

@@ -14,6 +14,7 @@ from extensions.filters import OrderOwnerFilter, UserStateFilter, ChatStateFilte
 from extensions.firebase import FirebaseStorage
 
 from utils.bill import decode_qr_bill, get_bill_data
+from utils.stats import collect_data
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -23,8 +24,8 @@ API_TOKEN = '1056772125:AAFQrxSVgSzMO3Ihc9Rb3n4Uqm9pYZAa5NQ'
 bot = Bot(token=API_TOKEN)
 bot.parse_mode = 'HTML'
 
-# storage = FirebaseStorage('./credentials.json')
-storage = MemoryStorage()
+storage = FirebaseStorage('./testcred.json')
+# storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
 dp.filters_factory.bind(OrderOwnerFilter)
@@ -172,6 +173,24 @@ async def if_finish_order(message: types.Message):
     await bot.send_message(message.from_user.id, message_text)
 
     await storage.set_state(chat=message.chat.id, state=ChatState.waiting_order)
+
+
+@dp.message_handler(commands='closeOrder', chat_type='group', is_order_owner=True, chat_state=ChatState.waiting_order)
+async def if_close_order(message: types.Message):
+    data = await storage.get_data(chat=message.chat.id)
+    order = OrderInfo(**data['order'])
+    order.date_delivered = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    # todo notify all
+
+    stats = await collect_data(bot, storage, message.chat.id)
+    await storage.add_stats(stats)
+
+    for user in order.participants:
+        await storage.reset_state(user=user, with_data=True)
+    await storage.reset_state(chat=message.chat.id, with_data=True)
+
+    message_text = "Текущий заказ завершен."
+    await bot.send_message(message.chat.id, message_text)
 
 
 @dp.message_handler(commands='cancel', chat_type='group', is_order_owner=True, chat_state_not=[ChatState.idle, None])
