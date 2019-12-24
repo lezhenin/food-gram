@@ -277,6 +277,8 @@ async def if_status_in_private(message: types.Message):
     await bot.send_message(message.from_user.id, message_text)
 
 
+items=0;
+
 @dp.message_handler(content_types=['photo'])
 async def handle_docs_photo(message: types.Message):
     photos = message.photo
@@ -296,13 +298,29 @@ async def handle_docs_photo(message: types.Message):
     if data is None:
         await bot.send_message(message.from_user.id, 'Не удалось найти чек.')
         return
-
+    global items
     items = data['document']['receipt']['items']
     message_text = ''
     for item in items:
         name, quantity, sum = item['name'], item['quantity'], item['sum']
         message_text += f'\'{name}\' x {quantity} == {sum / 100.0}\n'
     await bot.send_message(message.from_user.id, message_text)
+
+
+@dp.message_handler(
+    commands=['myitems'], regexp='/myitems \\d+\\s*', chat_type='group', state='*')
+async def bill_items(message: types.Message):
+    global items
+    parts = message.text.split(' ')
+    if len(parts) < 2:
+        return
+    message_text = message.from_user.first_name + " заказал:\n"
+    for i in parts[1:]:
+        i = int(i)
+        message_text += f'\'{items[i]["name"]}\' x {items[i]["quantity"]} == {items[i]["sum"] / 100.0}\n'
+        print()
+    await bot.send_message(message.chat.id, message_text)
+
 
 
 
