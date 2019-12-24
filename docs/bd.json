@@ -1,0 +1,27 @@
+{
+  "orders": [
+    {
+      "chat_name": "Some chat",
+      "date_started": "2019-10-25 15:00:00",
+      "date_finished": "2019-10-25 16:00:00",
+      "date_delivered": "2019-10-25 17:00:00",
+      "chosen_place": "Burger King",
+      "suggested_places" : [
+        "Burger King",
+        "KFC",
+        "McDonald's"
+      ],
+      "sum": 235000,
+      "participants:": [
+        {
+          "username": "xxxKillleRxxx",
+          "fullname": "Петр Иванов",
+          "dishes": [
+            "Воппер",
+            "Кола"
+          ]
+        }
+      ]
+    }
+  ]
+}
