@@ -126,7 +126,8 @@ async def if_start_poll(message: types.Message):
         data = await storage.get_data(chat=message.chat.id)
         order = OrderInfo(**data['order'])
         order.chosen_place = winner_option
-        await storage.update_data(chat=message.chat.id, data=data)
+        data['order'] = OrderInfo.as_dict(order)
+        await storage.set_data(chat=message.chat.id, data=data)
         await storage.set_state(chat=message.chat.id, state=ChatState.making_order)
         return
 
@@ -165,9 +166,10 @@ async def if_show_place(message: types.Message):
     await storage.set_state(chat=message.chat.id, state=ChatState.making_order)
 
     data = await storage.get_data(chat=message.chat.id)
+    data['order'] = OrderInfo.as_dict(order)
     if 'poll_message_id' in data:
         data.pop('poll_message_id')
-        await storage.set_data(chat=message.chat.id, data=data)
+    await storage.set_data(chat=message.chat.id, data=data)
 
 
 @dp.message_handler(commands='finishOrder', chat_type='group', is_order_owner=True, chat_state=[ChatState.making_order])
