@@ -176,6 +176,7 @@ async def if_show_place(message: types.Message):
 async def if_finish_order(message: types.Message):
 
     data = await storage.get_data(chat=message.chat.id)
+    print((data))
     order = OrderInfo(**data['order'])
     order.date_finished = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
@@ -335,8 +336,8 @@ async def if_status_in_private(message: types.Message):
 
     await bot.send_message(message.from_user.id, message_text)
 
-# чтобы фото было после finishorder chat_state=[ChatState.waiting_order] - но так оно не работает
-@dp.message_handler(content_types=['photo'])  # , chat_state=[ChatState.waiting_order])  # , state='*')
+
+@dp.message_handler(content_types=['photo'], state='*', chat_state=[ChatState.waiting_order])  # , chat_state=[ChatState.waiting_order])  # , state='*')
 async def handle_docs_photo(message: types.Message):
 
     photos = message.photo
@@ -351,10 +352,10 @@ async def handle_docs_photo(message: types.Message):
         await bot.send_message(message.from_user.id, 'Невозможно декодировать QR код.')
         return
 
-    await bot.send_message(message.from_user.id, 'Выполняется поиск чека...')
+    await bot.send_message(message.chat.id, 'Выполняется поиск чека...')
     data = await get_bill_data(bills[0])
     if data is None:
-        await bot.send_message(message.from_user.id, 'Не удалось найти чек.')
+        await bot.send_message(message.chat.id, 'Не удалось найти чек.')
         return
 
     items = data['document']['receipt']['items']
@@ -362,11 +363,12 @@ async def handle_docs_photo(message: types.Message):
     for item in items:
         name, quantity, sum = item['name'], item['quantity'], item['sum']
         message_text += f'\'{name}\' x {quantity} == {sum / 100.0}\n'
-    await bot.send_message(message.from_user.id, message_text)
-    tmp = await storage.get_data(user=message.from_user.id)
+    await bot.send_message(message.chat.id, message_text)
+    tmp = await storage.get_data(chat = message.chat.id)
+    print(tmp)
     order = OrderInfo(**tmp['order'])
-    order.price = data['document']['receipt']['totalSum']
-    print(data['document']['receipt']['items']['totalSum'])
+    order.price = data['document']['receipt']['totalSum']/100
+    print((order.price))
     await storage.update_data(chat=message.chat.id, data=data)
 
 
