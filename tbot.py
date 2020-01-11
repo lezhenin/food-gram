@@ -281,6 +281,20 @@ async def if_add_in_private(message: types.Message):
         await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
 
 
+@dp.message_handler(commands=['change'], regexp='/change \\d+ \\w+', chat_type='private', state='*', user_state=[UserState.making_order, UserState.finish_order])
+async def if_add_in_private(message: types.Message):
+    parts = message.text.split(' ', maxsplit=2)
+    if len(parts) < 3:
+        return
+    index = int(parts[1])
+    data = await storage.get_data(user=message.from_user.id)
+
+    dishes = data.get('dishes', [])
+    if index - 1 < len(dishes):
+        dishes[index-1] = parts[2]
+        await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
+
+
 @dp.message_handler(commands=['list'], chat_type='private', state='*', user_state=[UserState.making_order, UserState.finish_order])
 async def if_add_in_private(message: types.Message):
     data = await storage.get_data(user=message.from_user.id)
@@ -321,8 +335,8 @@ async def if_status_in_private(message: types.Message):
 
     await bot.send_message(message.from_user.id, message_text)
 
-
-@dp.message_handler(content_types=['photo'], state="*")
+# чтобы фото было после finishorder chat_state=[ChatState.waiting_order] - но так оно не работает
+@dp.message_handler(content_types=['photo'])  # , chat_state=[ChatState.waiting_order])  # , state='*')
 async def handle_docs_photo(message: types.Message):
 
     photos = message.photo
@@ -374,21 +388,6 @@ async def help_command(message):
                     "/finishOrder - ответственному - закончить формирование заказа\n" \
                     "/endOrder - ответственному - заказ выполнен\n"
     await bot.send_message(message.chat.id, help_message)
-
-
-@dp.message_handler(commands=['change'], regexp='/change \\d+ \\w+', chat_type='private', state='*', user_state=UserState.making_order)
-async def if_add_in_private(message: types.Message):
-    parts = message.text.split(' ', maxsplit=2)
-    if len(parts) < 3:
-        return
-    index = int(parts[1])
-    data = await storage.get_data(user=message.from_user.id)
-
-    dishes = data.get('dishes', [])
-    if index - 1 < len(dishes):
-        dishes[index-1] = parts[2]
-        await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
-
 
 # inline mode
 # DON'T FORGET to write "/setinline" to BotFather to change inline queries status.
