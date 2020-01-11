@@ -250,7 +250,7 @@ async def inline_kb_answer_callback_handler(query: types.CallbackQuery):
     await bot.send_message(query.from_user.id, message_text, reply_markup=keyboard_markup)
 
 
-@dp.message_handler(commands=['add'], chat_type='private', state='*', user_state=UserState.making_order)
+@dp.message_handler(commands=['add'], chat_type='private', state='*', user_state=[UserState.making_order, UserState.finish_order])
 async def if_add_in_private(message: types.Message):
     parts = message.text.split(' ', maxsplit=1)
     if len(parts) < 2:
@@ -266,7 +266,7 @@ async def if_add_in_private(message: types.Message):
 
 @dp.message_handler(
     commands=['delete'], regexp='/delete \\d+\\s*', chat_type='private',
-    state='*', user_state=UserState.making_order
+    state='*', user_state=[UserState.making_order, UserState.finish_order]
 )
 async def if_add_in_private(message: types.Message):
     parts = message.text.split(' ', maxsplit=1)
@@ -281,7 +281,7 @@ async def if_add_in_private(message: types.Message):
         await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
 
 
-@dp.message_handler(commands=['list'], chat_type='private', state='*', user_state=UserState.making_order)
+@dp.message_handler(commands=['list'], chat_type='private', state='*', user_state=[UserState.making_order, UserState.finish_order])
 async def if_add_in_private(message: types.Message):
     data = await storage.get_data(user=message.from_user.id)
     dishes = data.get('dishes', [])
@@ -290,7 +290,7 @@ async def if_add_in_private(message: types.Message):
     await bot.send_message(message.from_user.id, message_text)
 
 
-@dp.message_handler(commands=['finish'], chat_type='private', state='*', user_state=UserState.making_order)
+@dp.message_handler(commands=['finish'], chat_type='private', state='*', user_state=[UserState.making_order, UserState.finish_order])
 async def if_add_in_private(message: types.Message):
     data = await storage.get_data(user=message.from_user.id)
     dishes = data.get('dishes', [])
