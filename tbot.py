@@ -241,13 +241,16 @@ async def inline_kb_answer_callback_handler(query: types.CallbackQuery):
 
     message_text = f"Вы приняли участие в формирование заказа, созданного в \"{chat.title}\""
     
-    inline_button_text = "Добавить блюдо из списка"
-    keyboard_markup = types.InlineKeyboardMarkup()
-    keyboard_markup.add(
-        types.InlineKeyboardButton(inline_button_text, switch_inline_query_current_chat= '/add ')
-    )
+    if db_storage.get_dishes(query.from_user.username) == []:
+		await bot.send_message(query.from_user.id, message_text)
+    else:
+		inline_button_text = "Добавить блюдо из списка"
+		keyboard_markup = types.InlineKeyboardMarkup()
+		keyboard_markup.add(
+			types.InlineKeyboardButton(inline_button_text, switch_inline_query_current_chat= '/add ')
+        )
     
-    await bot.send_message(query.from_user.id, message_text, reply_markup=keyboard_markup)
+        await bot.send_message(query.from_user.id, message_text, reply_markup=keyboard_markup)
 
 
 @dp.message_handler(commands=['add'], chat_type='private', state='*', user_state=UserState.making_order)
@@ -416,6 +419,8 @@ async def inline_dishes(inline_query):
 async def inline_cafe(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
     lst = db_storage.get_places(inline_query.from_user.username)
+    if lst == []:
+		lst = ["Теремок. Блины", "Макдоналдс", "Бургер Кинг", "Баскин Роббинс", "Буше торты", "Bekitzer Бекицер", "Crispy Pizza", "Чебуречная Брынза", "Таверна Сиртаки", "Суши-бар Кидо"]
     if len(parts) < 2:
         inpLst = list(map(lambda x: InlineQueryResultArticle(
             id=hashlib.md5(x.encode()).hexdigest(),
