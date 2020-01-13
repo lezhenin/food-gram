@@ -16,7 +16,7 @@ from extensions.filters import OrderOwnerFilter, UserStateFilter, ChatStateFilte
 from extensions.firebase import FirebaseStorage
 
 from utils.bill import decode_qr_bill, get_bill_data
-from utils.stats import collect_data
+from utils import stats
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -26,10 +26,10 @@ API_TOKEN = '1056772125:AAFQrxSVgSzMO3Ihc9Rb3n4Uqm9pYZAa5NQ'
 bot = Bot(token=API_TOKEN)
 bot.parse_mode = 'HTML'
 
-db_storage = FirebaseStorage('./testcred.json')
-storage = db_storage
+# db_storage = FirebaseStorage('./testcred.json')
+# storage = db_storage
 # storage = FirebaseStorage('./testcred.json')
-# storage = MemoryStorage()
+storage = MemoryStorage()
 
 dp = Dispatcher(bot, storage=storage)
 
@@ -202,8 +202,8 @@ async def if_close_order(message: types.Message):
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
     # todo notify all
 
-    stats = await collect_data(bot, storage, message.chat.id)
-    await storage.add_stats(stats)
+    stats_data = await stats.collect_data(bot, storage, message.chat.id)
+    await storage.add_stats(stats_data)
 
     for user in order.participants:
         await storage.reset_state(user=user, with_data=True)
@@ -242,12 +242,12 @@ async def inline_kb_answer_callback_handler(query: types.CallbackQuery):
     message_text = f"Вы приняли участие в формирование заказа, созданного в \"{chat.title}\""
     
     if db_storage.get_dishes(query.from_user.username) == []:
-		await bot.send_message(query.from_user.id, message_text)
+        await bot.send_message(query.from_user.id, message_text)
     else:
-		inline_button_text = "Добавить блюдо из списка"
-		keyboard_markup = types.InlineKeyboardMarkup()
-		keyboard_markup.add(
-			types.InlineKeyboardButton(inline_button_text, switch_inline_query_current_chat= '/add ')
+        inline_button_text = "Добавить блюдо из списка"
+        keyboard_markup = types.InlineKeyboardMarkup()
+        keyboard_markup.add(
+            types.InlineKeyboardButton(inline_button_text, switch_inline_query_current_chat= '/add ')
         )
     
         await bot.send_message(query.from_user.id, message_text, reply_markup=keyboard_markup)
@@ -359,6 +359,18 @@ async def handle_docs_photo(message: types.Message):
     await storage.update_data(chat=message.chat.id, data=data)
 
 
+@dp.message_handler(commands=['stats'], state='*')
+async def if_stats(message: types.Message):
+    if message.chat.type == 'private':
+        stats_url = stats.get_user_url(message.chat.id)
+    elif message.chat.type == 'group':
+        stats_url = stats.get_chat_url(message.chat.id)
+    else:
+        return
+
+    message_text = f'Ваша статистика доступна по ссылке {message.link(stats_url)}'
+    await bot.send_message(message.chat.id, message_text)
+
 @dp.message_handler(commands=['help'], state='*')
 async def help_command(message):
     help_message = "Добавь меня в беседу. Потом:\n" \
@@ -420,7 +432,7 @@ async def inline_cafe(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
     lst = db_storage.get_places(inline_query.from_user.username)
     if lst == []:
-		lst = ["Теремок. Блины", "Макдоналдс", "Бургер Кинг", "Баскин Роббинс", "Буше торты", "Bekitzer Бекицер", "Crispy Pizza", "Чебуречная Брынза", "Таверна Сиртаки", "Суши-бар Кидо"]
+        lst = ["Теремок. Блины", "Макдоналдс", "Бургер Кинг", "Баскин Роббинс", "Буше торты", "Bekitzer Бекицер", "Crispy Pizza", "Чебуречная Брынза", "Таверна Сиртаки", "Суши-бар Кидо"]
     if len(parts) < 2:
         inpLst = list(map(lambda x: InlineQueryResultArticle(
             id=hashlib.md5(x.encode()).hexdigest(),
