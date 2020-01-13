@@ -82,11 +82,6 @@ async def if_start(message: types.Message):
     
     await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
 
-    # информируем главного что он главный
-    # message_text = "Привет, %s! Ты решил сделать заказ в чате %s \n 😎 " \
-    #                % (message.from_user.first_name, message.chat.title)
-    # await bot.send_message(message.from_user.id, message_text)
-
 
 @dp.message_handler(commands=['addPlace'], chat_type='group', chat_state=ChatState.gather_places)
 async def if_add_place(message: types.Message):
@@ -147,7 +142,7 @@ async def if_show_place(message: types.Message):
     poll_message_id = data['poll_message_id']
     poll = await bot.stop_poll(message.chat.id, poll_message_id)
 
-    # [print(opt)]
+
     poll.options.sort(key=lambda o: o.voter_count, reverse=True)
     winner_option = poll.options[0]
     order.chosen_place = winner_option.text
@@ -176,7 +171,6 @@ async def if_show_place(message: types.Message):
 async def if_finish_order(message: types.Message):
 
     data = await storage.get_data(chat=message.chat.id)
-    print((data))
     order = OrderInfo(**data['order'])
     order.date_finished = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
@@ -202,7 +196,6 @@ async def if_close_order(message: types.Message):
     order.date_delivered = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
     # todo notify all
-
     stats = await collect_data(bot, storage, message.chat.id)
     await storage.add_stats(stats)
 
@@ -337,7 +330,7 @@ async def if_status_in_private(message: types.Message):
     await bot.send_message(message.from_user.id, message_text)
 
 
-@dp.message_handler(content_types=['photo'], state='*', chat_state=[ChatState.waiting_order])  # , chat_state=[ChatState.waiting_order])  # , state='*')
+@dp.message_handler(content_types=['photo'], state='*', chat_state=[ChatState.waiting_order])
 async def handle_docs_photo(message: types.Message):
 
     photos = message.photo
@@ -364,11 +357,10 @@ async def handle_docs_photo(message: types.Message):
         name, quantity, sum = item['name'], item['quantity'], item['sum']
         message_text += f'\'{name}\' x {quantity} == {sum / 100.0}\n'
     await bot.send_message(message.chat.id, message_text)
-    tmp = await storage.get_data(chat = message.chat.id)
-    print(tmp)
-    order = OrderInfo(**tmp['order'])
-    order.price = data['document']['receipt']['totalSum']/100
-    print((order.price))
+    # todo фиксить запись в бд
+    data_from_db = await storage.get_data(chat = message.chat.id)
+    order = OrderInfo(**data_from_db['order'])
+    order.price = data['document']['receipt']['totalSum']
     await storage.update_data(chat=message.chat.id, data=data)
 
 
@@ -391,8 +383,7 @@ async def help_command(message):
                     "/endOrder - ответственному - заказ выполнен\n"
     await bot.send_message(message.chat.id, help_message)
 
-# inline mode
-# DON'T FORGET to write "/setinline" to BotFather to change inline queries status.
+
 @dp.inline_handler(lambda query: query.query.startswith('/add'), state=UserState.making_order)
 async def inline_dishes(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
