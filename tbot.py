@@ -338,11 +338,11 @@ async def handle_docs_photo(message: types.Message):
         return
 
     image_bytes = io.BytesIO()
-    await photos[0].download(image_bytes)
+    await photos[2].download(image_bytes)
 
     bills = await decode_qr_bill(image_bytes)
     if len(bills) < 1:
-        await bot.send_message(message.from_user.id, 'Невозможно декодировать QR код.')
+        await bot.send_message(message.chat.id, 'Невозможно декодировать QR код.')
         return
 
     await bot.send_message(message.chat.id, 'Выполняется поиск чека...')
@@ -357,11 +357,13 @@ async def handle_docs_photo(message: types.Message):
         name, quantity, sum = item['name'], item['quantity'], item['sum']
         message_text += f'\'{name}\' x {quantity} == {sum / 100.0}\n'
     await bot.send_message(message.chat.id, message_text)
-    # todo фиксить запись в бд
-    data_from_db = await storage.get_data(chat = message.chat.id)
+
+    data_from_db = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data_from_db['order'])
     order.price = data['document']['receipt']['totalSum']
-    await storage.update_data(chat=message.chat.id, data=data)
+    await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
+
+
 
 
 @dp.message_handler(commands=['help'], state='*')
