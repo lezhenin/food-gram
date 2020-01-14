@@ -340,8 +340,13 @@ async def handle_docs_photo(message: types.Message):
     if len(photos) < 1:
         return
 
+    ph = photos[0]
+    for number in range(1, len(photos)):
+        if ph['file_size'] < photos[number]['file_size']:
+            ph = photos[number]
+
     image_bytes = io.BytesIO()
-    await photos[2].download(image_bytes)
+    await ph.download(image_bytes)
 
     bills = await decode_qr_bill(image_bytes)
     if len(bills) < 1:
