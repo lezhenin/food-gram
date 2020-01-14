@@ -85,15 +85,13 @@ async def if_start(message: types.Message):
 
 @dp.message_handler(commands=['addPlace'], chat_type='group', chat_state=ChatState.gather_places)
 async def if_add_place(message: types.Message):
-    parts = message.text.split(' ', maxsplit=1)
-    if len(parts) < 2:
+    new_place = message.get_args()
+    if not new_place:
         return
 
-    new_place = parts[1]
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
     order.add_place(new_place)
-
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
 
     message_text = f"Место \"{new_place}\" было добавлено. Места участвующие в голосовании: {', '.join(order.places)}."
@@ -105,24 +103,21 @@ async def if_start_poll(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
 
-    if len(data['order']['places']) < 1:
+    if len(order.places) < 1:
         return
 
-    if len(data['order']['places']) == 1:
-        winner_option = data['order']['places']
+    if len(order.places) == 1:
+        winner_option = order.places[0]
         inline_button_text = "Принять участие в формировании заказа"
         inline_button_data = str(message.chat.id)
         keyboard_markup = types.InlineKeyboardMarkup()
         keyboard_markup.add(
             types.InlineKeyboardButton(inline_button_text, callback_data=inline_button_data)
         )
-        message_text = f"Вариант " + str(winner_option[0]) + " набрал наибольшее количество голосов."
+        message_text = f'Вариант {winner_option} набрал наибольшее количество голосов.'
         await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
-        data = await storage.get_data(chat=message.chat.id)
-        order = OrderInfo(**data['order'])
         order.chosen_place = winner_option
-        data['order'] = OrderInfo.as_dict(order)
-        await storage.set_data(chat=message.chat.id, data=data)
+        await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
         await storage.set_state(chat=message.chat.id, state=ChatState.making_order)
         return
 
@@ -168,7 +163,6 @@ async def if_show_place(message: types.Message):
 
 @dp.message_handler(commands='finishOrder', chat_type='group', is_order_owner=True, chat_state=[ChatState.making_order])
 async def if_finish_order(message: types.Message):
-
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
     order.date_finished = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -177,7 +171,6 @@ async def if_finish_order(message: types.Message):
     message_text = ''
     for user in order.participants:
         user_chat = await bot.get_chat(chat_id=user)
-        # todo check state
         user_data = await storage.get_data(user=user)
         message_text += f'Пользователь \'{user_chat.full_name}\' заказал:\n'
         for i, dish in enumerate(user_data['dishes']):
@@ -235,13 +228,13 @@ async def inline_kb_answer_callback_handler(query: types.CallbackQuery):
 
     message_text = f"Вы приняли участие в формирование заказа, созданного в \"{chat.title}\""
     
-    if db_storage.get_dishes(query.from_user.username) == []:
+    if not db_storage.get_dishes(query.from_user.username):
         await bot.send_message(query.from_user.id, message_text)
     else:
         inline_button_text = "Добавить блюдо из списка"
         keyboard_markup = types.InlineKeyboardMarkup()
         keyboard_markup.add(
-            types.InlineKeyboardButton(inline_button_text, switch_inline_query_current_chat= '/add ')
+            types.InlineKeyboardButton(inline_button_text, switch_inline_query_current_chat='/add ')
         )
     
         await bot.send_message(query.from_user.id, message_text, reply_markup=keyboard_markup)
@@ -249,12 +242,11 @@ async def inline_kb_answer_callback_handler(query: types.CallbackQuery):
 
 @dp.message_handler(commands=['add'], chat_type='private', state='*', user_state=[UserState.making_order, UserState.finish_order])
 async def if_add_in_private(message: types.Message):
-    parts = message.text.split(' ', maxsplit=1)
-    if len(parts) < 2:
+    dish = message.get_args()
+    if not dish:
         return
 
     data = await storage.get_data(user=message.from_user.id)
-    dish = parts[1]
     dishes = data.get('dishes', [])
     dishes.append(dish)
 
@@ -265,7 +257,7 @@ async def if_add_in_private(message: types.Message):
     commands=['delete'], regexp='/delete \\d+\\s*', chat_type='private',
     state='*', user_state=[UserState.making_order, UserState.finish_order]
 )
-async def if_add_in_private(message: types.Message):
+async def if_delete_in_private(message: types.Message):
     parts = message.text.split(' ', maxsplit=1)
     if len(parts) < 2:
         return
@@ -279,21 +271,23 @@ async def if_add_in_private(message: types.Message):
 
 
 @dp.message_handler(commands=['change'], regexp='/change \\d+ \\w+', chat_type='private', state='*', user_state=[UserState.making_order, UserState.finish_order])
-async def if_add_in_private(message: types.Message):
-    parts = message.text.split(' ', maxsplit=2)
-    if len(parts) < 3:
+async def if_change_in_private(message: types.Message):
+    args = message.get_args()
+    parts = args.split(' ', maxsplit=1)
+    if len(parts) < 2:
         return
-    index = int(parts[1])
-    data = await storage.get_data(user=message.from_user.id)
+    index = int(parts[0])
+    dish = parts[1]
 
+    data = await storage.get_data(user=message.from_user.id)
     dishes = data.get('dishes', [])
     if index - 1 < len(dishes):
-        dishes[index-1] = parts[2]
+        dishes[index-1] = dish
         await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
 
 
 @dp.message_handler(commands=['list'], chat_type='private', state='*', user_state=[UserState.making_order, UserState.finish_order])
-async def if_add_in_private(message: types.Message):
+async def if_list_in_private(message: types.Message):
     data = await storage.get_data(user=message.from_user.id)
     dishes = data.get('dishes', [])
     dishes = [str(i + 1) + '. ' + dishes[i] for i in range(len(dishes))]
@@ -302,7 +296,7 @@ async def if_add_in_private(message: types.Message):
 
 
 @dp.message_handler(commands=['finish'], chat_type='private', state='*', user_state=[UserState.making_order, UserState.finish_order])
-async def if_add_in_private(message: types.Message):
+async def if_finish_in_private(message: types.Message):
     data = await storage.get_data(user=message.from_user.id)
     dishes = data.get('dishes', [])
     dishes = [str(i + 1) + '. ' + dishes[i] for i in range(len(dishes))]
@@ -335,7 +329,6 @@ async def if_status_in_private(message: types.Message):
 
 @dp.message_handler(content_types=['photo'], state='*', chat_state=[ChatState.waiting_order])
 async def handle_docs_photo(message: types.Message):
-
     photos = message.photo
     if len(photos) < 1:
         return
@@ -358,7 +351,7 @@ async def handle_docs_photo(message: types.Message):
     message_text = ''
     for item in items:
         name, quantity, sum = item['name'], item['quantity'], item['sum']
-        message_text += f'\'{name}\' x {quantity} == {sum / 100.0}\n'
+        message_text += f'\'{name}\' place {quantity} == {sum / 100.0}\n'
     await bot.send_message(message.chat.id, message_text)
 
     data_from_db = await storage.get_data(chat=message.chat.id)
@@ -403,42 +396,41 @@ async def help_command(message):
 @dp.inline_handler(lambda query: query.query.startswith('/add'), state=UserState.making_order)
 async def inline_dishes(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
-    lst = db_storage.get_dishes(inline_query.from_user.username)
-    inpLst = []
+    dishes = db_storage.get_dishes(inline_query.from_user.username)
     if len(parts) < 2:
-        inpLst = list(map(lambda x: InlineQueryResultArticle(
-            id=hashlib.md5(x.encode()).hexdigest(),
-            title=x,
-            input_message_content=InputTextMessageContent('/add ' + x)
-            ), lst))
+        input_list = list(map(lambda dish: InlineQueryResultArticle(
+            id=hashlib.md5(dish.encode()).hexdigest(),
+            title=dish,
+            input_message_content=InputTextMessageContent(f'/add {dish}')
+            ), dishes))
     else:
-        inpLst = list(map(lambda x: InlineQueryResultArticle(
-            id=hashlib.md5(x.encode()).hexdigest(),
-            title=x,
-            input_message_content=InputTextMessageContent('/add ' + x)
-            ), list(filter(lambda x: x.lower().startswith(parts[1].lower()), lst))))
-    await bot.answer_inline_query(inline_query.id, results=inpLst, cache_time=1)
+        input_list = list(map(lambda dish: InlineQueryResultArticle(
+            id=hashlib.md5(dish.encode()).hexdigest(),
+            title=dish,
+            input_message_content=InputTextMessageContent(f'/add {dish}')
+            ), list(filter(lambda dish: dish.lower().startswith(parts[1].lower()), dishes))))
+    await bot.answer_inline_query(inline_query.id, results=input_list, cache_time=1)
 
 
 @dp.inline_handler(lambda query: query.query.startswith('/addPlace'))
-async def inline_cafe(inline_query):
+async def inline_places(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
-    lst = db_storage.get_places(inline_query.from_user.username)
-    if lst == []:
+    places = db_storage.get_places(inline_query.from_user.username)
+    if not places:
         lst = ["Теремок. Блины", "Макдоналдс", "Бургер Кинг", "Баскин Роббинс", "Буше торты", "Bekitzer Бекицер", "Crispy Pizza", "Чебуречная Брынза", "Таверна Сиртаки", "Суши-бар Кидо"]
     if len(parts) < 2:
-        inpLst = list(map(lambda x: InlineQueryResultArticle(
-            id=hashlib.md5(x.encode()).hexdigest(),
-            title=x,
-            input_message_content=InputTextMessageContent('/addPlace ' + x)
-            ), lst))
+        input_list = list(map(lambda place: InlineQueryResultArticle(
+            id=hashlib.md5(place.encode()).hexdigest(),
+            title=place,
+            input_message_content=InputTextMessageContent(f'/addPlace {place}')
+            ), places))
     else:
-        inpLst = list(map(lambda x: InlineQueryResultArticle(
-            id=hashlib.md5(x.encode()).hexdigest(),
-            title=x,
-            input_message_content=InputTextMessageContent('/addPlace ' + x)
-            ), list(filter(lambda x: x.lower().startswith(parts[1].lower()), lst))))
-    await bot.answer_inline_query(inline_query.id, results=inpLst, cache_time=1)
+        input_list = list(map(lambda place: InlineQueryResultArticle(
+            id=hashlib.md5(place.encode()).hexdigest(),
+            title=place,
+            input_message_content=InputTextMessageContent(f'/addPlace {place}')
+            ), list(filter(lambda place: place.lower().startswith(parts[1].lower()), places))))
+    await bot.answer_inline_query(inline_query.id, results=input_list, cache_time=1)
 
 
 if __name__ == '__main__':

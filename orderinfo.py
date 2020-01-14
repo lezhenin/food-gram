@@ -41,5 +41,5 @@ class OrderInfo:
             date_started='',
             date_finished='',
             date_delivered='',
-            price=''
+            price=0
         )
