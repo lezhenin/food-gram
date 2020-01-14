@@ -82,11 +82,6 @@ async def if_start(message: types.Message):
     
     await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
 
-    # информируем главного что он главный
-    # message_text = "Привет, %s! Ты решил сделать заказ в чате %s \n 😎 " \
-    #                % (message.from_user.first_name, message.chat.title)
-    # await bot.send_message(message.from_user.id, message_text)
-
 
 @dp.message_handler(commands=['addPlace'], chat_type='group', chat_state=ChatState.gather_places)
 async def if_add_place(message: types.Message):
@@ -147,7 +142,7 @@ async def if_show_place(message: types.Message):
     poll_message_id = data['poll_message_id']
     poll = await bot.stop_poll(message.chat.id, poll_message_id)
 
-    # [print(opt)]
+
     poll.options.sort(key=lambda o: o.voter_count, reverse=True)
     winner_option = poll.options[0]
     order.chosen_place = winner_option.text
@@ -201,7 +196,6 @@ async def if_close_order(message: types.Message):
     order.date_delivered = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
     # todo notify all
-
     stats = await collect_data(bot, storage, message.chat.id)
     await storage.add_stats(stats)
 
@@ -253,7 +247,7 @@ async def inline_kb_answer_callback_handler(query: types.CallbackQuery):
         await bot.send_message(query.from_user.id, message_text, reply_markup=keyboard_markup)
 
 
-@dp.message_handler(commands=['add'], chat_type='private', state='*', user_state=UserState.making_order)
+@dp.message_handler(commands=['add'], chat_type='private', state='*', user_state=[UserState.making_order, UserState.finish_order])
 async def if_add_in_private(message: types.Message):
     parts = message.text.split(' ', maxsplit=1)
     if len(parts) < 2:
@@ -269,7 +263,7 @@ async def if_add_in_private(message: types.Message):
 
 @dp.message_handler(
     commands=['delete'], regexp='/delete \\d+\\s*', chat_type='private',
-    state='*', user_state=UserState.making_order
+    state='*', user_state=[UserState.making_order, UserState.finish_order]
 )
 async def if_add_in_private(message: types.Message):
     parts = message.text.split(' ', maxsplit=1)
@@ -284,7 +278,21 @@ async def if_add_in_private(message: types.Message):
         await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
 
 
-@dp.message_handler(commands=['list'], chat_type='private', state='*', user_state=UserState.making_order)
+@dp.message_handler(commands=['change'], regexp='/change \\d+ \\w+', chat_type='private', state='*', user_state=[UserState.making_order, UserState.finish_order])
+async def if_add_in_private(message: types.Message):
+    parts = message.text.split(' ', maxsplit=2)
+    if len(parts) < 3:
+        return
+    index = int(parts[1])
+    data = await storage.get_data(user=message.from_user.id)
+
+    dishes = data.get('dishes', [])
+    if index - 1 < len(dishes):
+        dishes[index-1] = parts[2]
+        await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
+
+
+@dp.message_handler(commands=['list'], chat_type='private', state='*', user_state=[UserState.making_order, UserState.finish_order])
 async def if_add_in_private(message: types.Message):
     data = await storage.get_data(user=message.from_user.id)
     dishes = data.get('dishes', [])
@@ -293,7 +301,7 @@ async def if_add_in_private(message: types.Message):
     await bot.send_message(message.from_user.id, message_text)
 
 
-@dp.message_handler(commands=['finish'], chat_type='private', state='*', user_state=UserState.making_order)
+@dp.message_handler(commands=['finish'], chat_type='private', state='*', user_state=[UserState.making_order, UserState.finish_order])
 async def if_add_in_private(message: types.Message):
     data = await storage.get_data(user=message.from_user.id)
     dishes = data.get('dishes', [])
@@ -325,7 +333,7 @@ async def if_status_in_private(message: types.Message):
     await bot.send_message(message.from_user.id, message_text)
 
 
-@dp.message_handler(content_types=['photo'], state="*")
+@dp.message_handler(content_types=['photo'], state='*', chat_state=[ChatState.waiting_order])
 async def handle_docs_photo(message: types.Message):
 
     photos = message.photo
@@ -333,17 +341,17 @@ async def handle_docs_photo(message: types.Message):
         return
 
     image_bytes = io.BytesIO()
-    await photos[0].download(image_bytes)
+    await photos[2].download(image_bytes)
 
     bills = await decode_qr_bill(image_bytes)
     if len(bills) < 1:
-        await bot.send_message(message.from_user.id, 'Невозможно декодировать QR код.')
+        await bot.send_message(message.chat.id, 'Невозможно декодировать QR код.')
         return
 
-    await bot.send_message(message.from_user.id, 'Выполняется поиск чека...')
+    await bot.send_message(message.chat.id, 'Выполняется поиск чека...')
     data = await get_bill_data(bills[0])
     if data is None:
-        await bot.send_message(message.from_user.id, 'Не удалось найти чек.')
+        await bot.send_message(message.chat.id, 'Не удалось найти чек.')
         return
 
     items = data['document']['receipt']['items']
@@ -351,12 +359,14 @@ async def handle_docs_photo(message: types.Message):
     for item in items:
         name, quantity, sum = item['name'], item['quantity'], item['sum']
         message_text += f'\'{name}\' x {quantity} == {sum / 100.0}\n'
-    await bot.send_message(message.from_user.id, message_text)
-    tmp = await storage.get_data(user=message.from_user.id)
-    order = OrderInfo(**tmp['order'])
+    await bot.send_message(message.chat.id, message_text)
+
+    data_from_db = await storage.get_data(chat=message.chat.id)
+    order = OrderInfo(**data_from_db['order'])
     order.price = data['document']['receipt']['totalSum']
-    print(data['document']['receipt']['items']['totalSum'])
-    await storage.update_data(chat=message.chat.id, data=data)
+    await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
+
+
 
 
 @dp.message_handler(commands=['help'], state='*')
@@ -379,22 +389,6 @@ async def help_command(message):
     await bot.send_message(message.chat.id, help_message)
 
 
-@dp.message_handler(commands=['change'], regexp='/change \\d+ \\w+', chat_type='private', state='*', user_state=UserState.making_order)
-async def if_add_in_private(message: types.Message):
-    parts = message.text.split(' ', maxsplit=2)
-    if len(parts) < 3:
-        return
-    index = int(parts[1])
-    data = await storage.get_data(user=message.from_user.id)
-
-    dishes = data.get('dishes', [])
-    if index - 1 < len(dishes):
-        dishes[index-1] = parts[2]
-        await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
-
-
-# inline mode
-# DON'T FORGET to write "/setinline" to BotFather to change inline queries status.
 @dp.inline_handler(lambda query: query.query.startswith('/add'), state=UserState.making_order)
 async def inline_dishes(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
