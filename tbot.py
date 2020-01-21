@@ -6,8 +6,6 @@ from datetime import datetime, timedelta
 
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.types import InlineQuery, InputTextMessageContent, InlineQueryResultArticle
 from aiogram.utils import executor
 
@@ -141,6 +139,16 @@ async def if_show_place(message: types.Message):
     poll = await bot.stop_poll(message.chat.id, poll_message_id)
 
     poll.options.sort(key=lambda o: o.voter_count, reverse=True)
+
+    if len(poll.options) > 1 and poll.options[0].voter_count == poll.options[1].voter_count:
+        question = "Из какого места заказать еду?"
+        message_text = f"Варианты \"{poll.options[0].text}\" и \"{poll.options[1].text}\" " \
+            "набрали наибольшее количество голосов. Необходимо провести повторное голосование."
+        await bot.send_message(message.chat.id, message_text)
+        sent_message = await bot.send_poll(message.chat.id, question, order.places, None, None)
+        await storage.update_data(chat=message.chat.id, data={'poll_message_id': sent_message.message_id})
+        return
+
     winner_option = poll.options[0]
     order.chosen_place = winner_option.text
 
