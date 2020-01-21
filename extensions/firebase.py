@@ -120,14 +120,14 @@ class FirebaseStorage(BaseStorage):
 
     def get_dishes(self, user):
         inline_dishes = []
-        for i in self.client.collection('stats').get():
-            for j in filter(lambda x: x['user_id'] == user, list(i.get('participants'))):
-                inline_dishes.extend(j['dishes'])
+        for order in self.client.collection('stats').select(['participants', 'dishes']).stream():
+            for participant in filter(lambda x: x['user_id'] == user, list(order.get('participants'))):
+                inline_dishes.extend(participant['dishes'])
         return list(set(inline_dishes))
 
     def get_places(self, user):
         inline_places = []
-        for i in self.client.collection('stats').get():
-            if len(list(filter(lambda x: x['user_id'] == user, list(i.get('participants'))))) > 0:
-                inline_places.extend(i.get('suggested_places'))
+        for order in self.client.collection('stats').select(['participants', 'suggested_places']).stream():
+            if list(filter(lambda x: x['user_id'] == user, list(order.get('participants')))):
+                inline_places.extend(order.get('suggested_places'))
         return list(set(inline_places))
