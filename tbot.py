@@ -6,9 +6,7 @@ from datetime import datetime
 
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.types import InlineQuery, InputTextMessageContent, InlineQueryResultArticle
+from aiogram.types import InputTextMessageContent, InlineQueryResultArticle
 from aiogram.utils import executor
 
 from orderinfo import OrderInfo
@@ -187,10 +185,15 @@ async def if_close_order(message: types.Message):
     order = OrderInfo(**data['order'])
     order.date_delivered = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
-    # todo notify all
 
     stats_data = await stats.collect_data(bot, storage, message.chat.id)
     await storage.add_stats(stats_data)
+
+    message_text = ""
+    for user in stats_data['participants']:
+        message_text += f"@{user['username']} "
+    message_text += "Заказ пришел"
+    await bot.send_message(message.chat.id, message_text)
 
     for user in order.participants:
         await storage.reset_state(user=user, with_data=True)
@@ -226,9 +229,9 @@ async def inline_kb_answer_callback_handler(query: types.CallbackQuery):
     await storage.set_state(user=query.from_user.id, state=UserState.making_order)
     await storage.update_data(user=query.from_user.id, data={'order_chat_id': chat.id})
 
-    message_text = f"Вы приняли участие в формирование заказа, созданного в \"{chat.title}\""
-    
-    if not db_storage.get_dishes(query.from_user.username):
+    message_text = f"Вы приняли участие в формировании заказа, созданного в \"{chat.title}\""
+
+    if not db_storage.get_dishes(query.from_user.id):
         await bot.send_message(query.from_user.id, message_text)
     else:
         inline_button_text = "Добавить блюдо из списка"
@@ -381,22 +384,24 @@ async def help_command(message):
                    "/startPoll - выбор места заказа (после добавления всех мест)\n" \
                    "/showPlace - победившее место\n" \
                    "/cancel - отмена заказа\n" \
-                   "После выбора места можно делать заказ в личном диалоге с ботом:\n" \
+                   "\nПосле выбора места можно делать заказ в личном диалоге с ботом:\n" \
                    "/add - добавить пункт заказа\n" \
                    "/change - изменить пункт заказа\n" \
                    "/delete - убрать пункт заказа\n" \
                    "/list - вывод пунктов заказа\n" \
                    "/finish - закончить формирование заказа\n" \
                    "/status - ответственному - проверить состояние заказа\n" \
-                    "/finishOrder - ответственному - закончить формирование заказа\n" \
-                    "/endOrder - ответственному - заказ выполнен\n"
+                   "\nПосле выбора блюд ответственный завершает заказ в общем чате:\n" \
+                   "/finishOrder - ответственному - закончить формирование заказа\n" \
+                   "/closeOrder - ответственному - заказ выполнен\n" \
+                   "\n/stats - получение статистики\n"
     await bot.send_message(message.chat.id, help_message)
 
 
 @dp.inline_handler(lambda query: query.query.startswith('/add'), state=UserState.making_order)
 async def inline_dishes(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
-    dishes = db_storage.get_dishes(inline_query.from_user.username)
+    dishes = db_storage.get_dishes(inline_query.from_user.id)
     if len(parts) < 2:
         input_list = list(map(lambda dish: InlineQueryResultArticle(
             id=hashlib.md5(dish.encode()).hexdigest(),
@@ -415,9 +420,14 @@ async def inline_dishes(inline_query):
 @dp.inline_handler(lambda query: query.query.startswith('/addPlace'))
 async def inline_places(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
-    places = db_storage.get_places(inline_query.from_user.username)
+    places = db_storage.get_places(inline_query.from_user.id)
     if not places:
-        lst = ["Теремок. Блины", "Макдоналдс", "Бургер Кинг", "Баскин Роббинс", "Буше торты", "Bekitzer Бекицер", "Crispy Pizza", "Чебуречная Брынза", "Таверна Сиртаки", "Суши-бар Кидо"]
+        places = [
+            "Теремок. Блины", "Макдоналдс", "Бургер Кинг",
+            "Баскин Роббинс", "Буше торты", "Bekitzer Бекицер",
+            "Crispy Pizza", "Чебуречная Брынза", "Таверна Сиртаки", "Суши-бар Кидо"
+        ]
+
     if len(parts) < 2:
         input_list = list(map(lambda place: InlineQueryResultArticle(
             id=hashlib.md5(place.encode()).hexdigest(),
