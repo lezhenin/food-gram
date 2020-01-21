@@ -105,21 +105,19 @@ async def if_start_poll(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
 
-    if len(data['order']['places']) < 1:
+    if len(order.places) < 1:
         return
 
-    if len(data['order']['places']) == 1:
-        winner_option = data['order']['places']
+    if len(order.places) == 1:
+        winner_option = order.places[0]
         inline_button_text = "Принять участие в формировании заказа"
         inline_button_data = str(message.chat.id)
         keyboard_markup = types.InlineKeyboardMarkup()
         keyboard_markup.add(
             types.InlineKeyboardButton(inline_button_text, callback_data=inline_button_data)
         )
-        message_text = f"Вариант " + str(winner_option[0]) + " набрал наибольшее количество голосов."
+        message_text = f"Только один вариант \"" + str(winner_option) + "\" был предложен."
         await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
-        data = await storage.get_data(chat=message.chat.id)
-        order = OrderInfo(**data['order'])
         order.chosen_place = winner_option
         data['order'] = OrderInfo.as_dict(order)
         await storage.set_data(chat=message.chat.id, data=data)
@@ -200,16 +198,21 @@ async def if_close_order(message: types.Message):
 
     message_text = ""
     for user in stats_data['participants']:
-        message_text += f"@{user['username']} "
-    message_text += "Заказ пришел"
+        username = user['username']
+        if username is not None:
+            message_text += f"@{username}, "
+        else:
+            await bot.send_message(user['user_id'], "Заказ доставлен.")
+    if len(message_text) > 0:
+        message_text += "заказ доставлен."
+    else:
+        message_text += "Заказ доставлен. "
+    message_text += "Текущий заказ завершен."
     await bot.send_message(message.chat.id, message_text)
 
     for user in order.participants:
         await storage.reset_state(user=user, with_data=True)
     await storage.reset_state(chat=message.chat.id, with_data=True)
-
-    message_text = "Текущий заказ завершен."
-    await bot.send_message(message.chat.id, message_text)
 
 
 @dp.message_handler(commands='cancel', chat_type='group', is_order_owner=True, chat_state_not=[ChatState.idle, None])
