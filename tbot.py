@@ -2,7 +2,7 @@ import io
 import logging
 import hashlib
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
@@ -413,7 +413,8 @@ async def help_command(message):
 @dp.inline_handler(lambda query: query.query.startswith('/add'), state=UserState.making_order)
 async def inline_dishes(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
-    lst = db_storage.get_dishes(inline_query.from_user.id)
+    date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
+    lst = db_storage.get_dishes(inline_query.from_user.id, date_from)
     inpLst = []
     if len(parts) < 2:
         inpLst = list(map(lambda x: InlineQueryResultArticle(
@@ -433,7 +434,8 @@ async def inline_dishes(inline_query):
 @dp.inline_handler(lambda query: query.query.startswith('/addplace'))
 async def inline_cafe(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
-    lst = db_storage.get_places(inline_query.from_user.id)
+    date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
+    lst = db_storage.get_places(inline_query.from_user.id, date_from)
     if lst == []:
         lst = ["Теремок. Блины", "Макдоналдс", "Бургер Кинг", "Баскин Роббинс", "Буше торты", "Bekitzer Бекицер", "Crispy Pizza", "Чебуречная Брынза", "Таверна Сиртаки", "Суши-бар Кидо"]
     if len(parts) < 2:
