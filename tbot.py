@@ -141,9 +141,11 @@ async def if_show_place(message: types.Message):
     poll.options.sort(key=lambda o: o.voter_count, reverse=True)
 
     if len(poll.options) > 1 and poll.options[0].voter_count == poll.options[1].voter_count:
+        top_options = filter(lambda o: o.voter_count == poll.options[0].voter_count, poll.options)
+        options = "\", \"".join(map(lambda o: o.text, top_options))
         question = "Из какого места заказать еду?"
-        message_text = f"Варианты \"{poll.options[0].text}\" и \"{poll.options[1].text}\" " \
-            "набрали наибольшее количество голосов. Необходимо провести повторное голосование."
+        message_text = f"Варианты \"{options}\" набрали наибольшее количество голосов. " \
+            "Необходимо провести повторное голосование."
         await bot.send_message(message.chat.id, message_text)
         sent_message = await bot.send_poll(message.chat.id, question, order.places, None, None)
         await storage.update_data(chat=message.chat.id, data={'poll_message_id': sent_message.message_id})
