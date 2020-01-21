@@ -77,13 +77,13 @@ async def if_start(message: types.Message):
     inline_button_text = "Предложить место из списка"
     keyboard_markup = types.InlineKeyboardMarkup()
     keyboard_markup.add(
-        types.InlineKeyboardButton(inline_button_text, switch_inline_query_current_chat= '/addPlace ')
+        types.InlineKeyboardButton(inline_button_text, switch_inline_query_current_chat='/addplace ')
     )
     
     await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
 
 
-@dp.message_handler(commands=['addPlace'], chat_type='group', chat_state=ChatState.gather_places)
+@dp.message_handler(commands=['addplace'], chat_type='group', chat_state=ChatState.gather_places)
 async def if_add_place(message: types.Message):
     parts = message.text.split(' ', maxsplit=1)
     if len(parts) < 2:
@@ -100,7 +100,7 @@ async def if_add_place(message: types.Message):
     await bot.send_message(message.chat.id, message_text)
 
 
-@dp.message_handler(commands=['startPoll'], chat_type='group', is_order_owner=True, chat_state=ChatState.gather_places)
+@dp.message_handler(commands=['startpoll'], chat_type='group', is_order_owner=True, chat_state=ChatState.gather_places)
 async def if_start_poll(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
@@ -134,7 +134,7 @@ async def if_start_poll(message: types.Message):
     await storage.update_data(chat=message.chat.id, data={'poll_message_id': sent_message.message_id})
 
 
-@dp.message_handler(commands=['showPlace'], chat_type='group', is_order_owner=True, chat_state=ChatState.poll)
+@dp.message_handler(commands=['finishpoll'], chat_type='group', is_order_owner=True, chat_state=ChatState.poll)
 async def if_show_place(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
@@ -166,7 +166,7 @@ async def if_show_place(message: types.Message):
     await storage.set_data(chat=message.chat.id, data=data)
 
 
-@dp.message_handler(commands='finishOrder', chat_type='group', is_order_owner=True, chat_state=[ChatState.making_order])
+@dp.message_handler(commands='finishorder', chat_type='group', is_order_owner=True, chat_state=[ChatState.making_order])
 async def if_finish_order(message: types.Message):
 
     data = await storage.get_data(chat=message.chat.id)
@@ -188,7 +188,7 @@ async def if_finish_order(message: types.Message):
     await storage.set_state(chat=message.chat.id, state=ChatState.waiting_order)
 
 
-@dp.message_handler(commands='closeOrder', chat_type='group', is_order_owner=True, chat_state=ChatState.waiting_order)
+@dp.message_handler(commands='closeorder', chat_type='group', is_order_owner=True, chat_state=ChatState.waiting_order)
 async def if_close_order(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
@@ -388,10 +388,10 @@ async def if_stats(message: types.Message):
 @dp.message_handler(commands=['help'], state='*')
 async def help_command(message):
     help_message = "Добавь меня в беседу. Потом:\n" \
-                   "/start - запуск заказа. Нажавший - ответственный\n" \
-                   "/addPlace - добавление места заказа\n" \
-                   "/startPoll - выбор места заказа (после добавления всех мест)\n" \
-                   "/showPlace - победившее место\n" \
+                   "/start - начать заказ. Нажавший - ответственный\n" \
+                   "/addplace - предложить место заказа для голосования\n" \
+                   "/startpoll - начать голосование для выбора места заказа\n" \
+                   "/finishpoll - завершить голосование\n" \
                    "/cancel - отмена заказа\n" \
                    "\nПосле выбора места можно делать заказ в личном диалоге с ботом:\n" \
                    "/add - добавить пункт заказа\n" \
@@ -401,9 +401,9 @@ async def help_command(message):
                    "/finish - закончить формирование заказа\n" \
                    "/status - ответственному - проверить состояние заказа\n" \
                    "\nПосле выбора блюд ответственный завершает заказ в общем чате:\n" \
-                   "/finishOrder - ответственному - закончить формирование заказа\n" \
-                   "/closeOrder - ответственному - заказ выполнен\n" \
-                   "\n/stats - получение статистики\n"
+                   "/finishorder - закончить формирование заказа\n" \
+                   "/closeorder - заказ выполнен\n" \
+                   "\n/stats - получить ссылку для просмотра статистики\n"
     await bot.send_message(message.chat.id, help_message)
 
 
@@ -427,7 +427,7 @@ async def inline_dishes(inline_query):
     await bot.answer_inline_query(inline_query.id, results=inpLst, cache_time=1)
 
 
-@dp.inline_handler(lambda query: query.query.startswith('/addPlace'))
+@dp.inline_handler(lambda query: query.query.startswith('/addplace'))
 async def inline_cafe(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
     lst = db_storage.get_places(inline_query.from_user.id)
@@ -437,13 +437,13 @@ async def inline_cafe(inline_query):
         inpLst = list(map(lambda x: InlineQueryResultArticle(
             id=hashlib.md5(x.encode()).hexdigest(),
             title=x,
-            input_message_content=InputTextMessageContent('/addPlace ' + x)
+            input_message_content=InputTextMessageContent('/addplace ' + x)
             ), lst))
     else:
         inpLst = list(map(lambda x: InlineQueryResultArticle(
             id=hashlib.md5(x.encode()).hexdigest(),
             title=x,
-            input_message_content=InputTextMessageContent('/addPlace ' + x)
+            input_message_content=InputTextMessageContent('/addplace ' + x)
             ), list(filter(lambda x: x.lower().startswith(parts[1].lower()), lst))))
     await bot.answer_inline_query(inline_query.id, results=inpLst, cache_time=1)
 
