@@ -1,4 +1,4 @@
-from orderinfo import OrderInfo
+from foodgram.model.orderinfo import OrderInfo
 
 
 class OrderManger:

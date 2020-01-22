@@ -1,14 +1,14 @@
-from orderinfo import OrderInfo
+from foodgram.model.orderinfo import OrderInfo
 
-STATS_URL = 'http://localhost:4200'
+from ..config import STATISTICS_SERVICE_BASE_URL
 
 
 def get_chat_url(chat_id):
-    return f'{STATS_URL}/chat/chat_id={chat_id}'
+    return f'{STATISTICS_SERVICE_BASE_URL}/chat/chat_id={chat_id}'
 
 
 def get_user_url(user_id):
-    return f'{STATS_URL}/user/user_id={user_id}'
+    return f'{STATISTICS_SERVICE_BASE_URL}/user/user_id={user_id}'
 
 
 async def collect_data(bot, storage, chat_id):
