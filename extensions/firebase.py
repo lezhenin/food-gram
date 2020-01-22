@@ -118,16 +118,24 @@ class FirebaseStorage(BaseStorage):
         collection = self.client.collection('stats')
         collection.add(stats)
 
-    def get_dishes(self, user):
+    def get_dishes(self, user, date_from=None):
         inline_dishes = []
-        for i in self.client.collection('stats').get():
-            for j in filter(lambda x: x['user_id'] == user, list(i.get('participants'))):
-                inline_dishes.extend(j['dishes'])
+        for order in self._get_stats_collection(['participants', 'dishes'], date_from).stream():
+            for participant in filter(lambda x: x['user_id'] == user, list(order.get('participants'))):
+                inline_dishes.extend(participant['dishes'])
         return list(set(inline_dishes))
 
-    def get_places(self, user):
+    def get_places(self, user, date_from=None):
         inline_places = []
-        for i in self.client.collection('stats').get():
-            if len(list(filter(lambda x: x['user_id'] == user, list(i.get('participants'))))) > 0:
-                inline_places.extend(i.get('suggested_places'))
+        for order in self._get_stats_collection(['participants', 'suggested_places'], date_from).stream():
+            if list(filter(lambda x: x['user_id'] == user, list(order.get('participants')))):
+                inline_places.extend(order.get('suggested_places'))
         return list(set(inline_places))
+
+    def _get_stats_collection(self, fields=None, date_from=None):
+        order_collection = self.client.collection('stats')
+        if date_from is not None:
+            order_collection = order_collection.where('date_started', '>', date_from)
+        if fields is not None:
+            order_collection = order_collection.select(fields)
+        return order_collection

@@ -2,7 +2,7 @@ import io
 import logging
 import hashlib
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
@@ -75,13 +75,13 @@ async def if_start(message: types.Message):
     inline_button_text = "Предложить место из списка"
     keyboard_markup = types.InlineKeyboardMarkup()
     keyboard_markup.add(
-        types.InlineKeyboardButton(inline_button_text, switch_inline_query_current_chat= '/addPlace ')
+        types.InlineKeyboardButton(inline_button_text, switch_inline_query_current_chat='/addplace ')
     )
     
     await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
 
 
-@dp.message_handler(commands=['addPlace'], chat_type='group', chat_state=ChatState.gather_places)
+@dp.message_handler(commands=['addplace'], chat_type='group', chat_state=ChatState.gather_places)
 async def if_add_place(message: types.Message):
     new_place = message.get_args()
     if not new_place:
@@ -96,7 +96,7 @@ async def if_add_place(message: types.Message):
     await bot.send_message(message.chat.id, message_text)
 
 
-@dp.message_handler(commands=['startPoll'], chat_type='group', is_order_owner=True, chat_state=ChatState.gather_places)
+@dp.message_handler(commands=['startpoll'], chat_type='group', is_order_owner=True, chat_state=ChatState.gather_places)
 async def if_start_poll(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
@@ -112,7 +112,7 @@ async def if_start_poll(message: types.Message):
         keyboard_markup.add(
             types.InlineKeyboardButton(inline_button_text, callback_data=inline_button_data)
         )
-        message_text = f'Вариант {winner_option} набрал наибольшее количество голосов.'
+        message_text = f"Только один вариант \"" + str(winner_option) + "\" был предложен."
         await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
         order.chosen_place = winner_option
         await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
@@ -127,7 +127,7 @@ async def if_start_poll(message: types.Message):
     await storage.update_data(chat=message.chat.id, data={'poll_message_id': sent_message.message_id})
 
 
-@dp.message_handler(commands=['showPlace'], chat_type='group', is_order_owner=True, chat_state=ChatState.poll)
+@dp.message_handler(commands=['finishpoll'], chat_type='group', is_order_owner=True, chat_state=ChatState.poll)
 async def if_show_place(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
@@ -136,6 +136,18 @@ async def if_show_place(message: types.Message):
     poll = await bot.stop_poll(message.chat.id, poll_message_id)
 
     poll.options.sort(key=lambda o: o.voter_count, reverse=True)
+
+    if len(poll.options) > 1 and poll.options[0].voter_count == poll.options[1].voter_count:
+        top_options = filter(lambda o: o.voter_count == poll.options[0].voter_count, poll.options)
+        options = "\", \"".join(map(lambda o: o.text, top_options))
+        question = "Из какого места заказать еду?"
+        message_text = f"Варианты \"{options}\" набрали наибольшее количество голосов. " \
+            "Необходимо провести повторное голосование."
+        await bot.send_message(message.chat.id, message_text)
+        sent_message = await bot.send_poll(message.chat.id, question, order.places, None, None)
+        await storage.update_data(chat=message.chat.id, data={'poll_message_id': sent_message.message_id})
+        return
+
     winner_option = poll.options[0]
     order.chosen_place = winner_option.text
 
@@ -159,7 +171,7 @@ async def if_show_place(message: types.Message):
     await storage.set_data(chat=message.chat.id, data=data)
 
 
-@dp.message_handler(commands='finishOrder', chat_type='group', is_order_owner=True, chat_state=[ChatState.making_order])
+@dp.message_handler(commands='finishorder', chat_type='group', is_order_owner=True, chat_state=[ChatState.making_order])
 async def if_finish_order(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
@@ -179,7 +191,7 @@ async def if_finish_order(message: types.Message):
     await storage.set_state(chat=message.chat.id, state=ChatState.waiting_order)
 
 
-@dp.message_handler(commands='closeOrder', chat_type='group', is_order_owner=True, chat_state=ChatState.waiting_order)
+@dp.message_handler(commands='closeorder', chat_type='group', is_order_owner=True, chat_state=ChatState.waiting_order)
 async def if_close_order(message: types.Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
@@ -191,16 +203,21 @@ async def if_close_order(message: types.Message):
 
     message_text = ""
     for user in stats_data['participants']:
-        message_text += f"@{user['username']} "
-    message_text += "Заказ пришел"
+        username = user['username']
+        if username is not None:
+            message_text += f"@{username}, "
+        else:
+            await bot.send_message(user['user_id'], "Заказ доставлен.")
+    if len(message_text) > 0:
+        message_text += "заказ доставлен."
+    else:
+        message_text += "Заказ доставлен. "
+    message_text += "Текущий заказ завершен."
     await bot.send_message(message.chat.id, message_text)
 
     for user in order.participants:
         await storage.reset_state(user=user, with_data=True)
     await storage.reset_state(chat=message.chat.id, with_data=True)
-
-    message_text = "Текущий заказ завершен."
-    await bot.send_message(message.chat.id, message_text)
 
 
 @dp.message_handler(commands='cancel', chat_type='group', is_order_owner=True, chat_state_not=[ChatState.idle, None])
@@ -379,29 +396,30 @@ async def if_stats(message: types.Message):
 @dp.message_handler(commands=['help'], state='*')
 async def help_command(message):
     help_message = "Добавь меня в беседу. Потом:\n" \
-                   "/start - запуск заказа. Нажавший - ответственный\n" \
-                   "/addPlace - добавление места заказа\n" \
-                   "/startPoll - выбор места заказа (после добавления всех мест)\n" \
-                   "/showPlace - победившее место\n" \
+                   "/start - начать заказ. Нажавший - ответственный\n" \
+                   "/addplace - предложить место заказа для голосования\n" \
+                   "/startpoll - начать голосование для выбора места заказа\n" \
+                   "/finishpoll - завершить голосование\n" \
                    "/cancel - отмена заказа\n" \
                    "\nПосле выбора места можно делать заказ в личном диалоге с ботом:\n" \
                    "/add - добавить пункт заказа\n" \
                    "/change - изменить пункт заказа\n" \
                    "/delete - убрать пункт заказа\n" \
-                   "/list - вывод пунктов заказа\n" \
+                   "/list - вывести пункты заказа\n" \
                    "/finish - закончить формирование заказа\n" \
                    "/status - ответственному - проверить состояние заказа\n" \
                    "\nПосле выбора блюд ответственный завершает заказ в общем чате:\n" \
-                   "/finishOrder - ответственному - закончить формирование заказа\n" \
-                   "/closeOrder - ответственному - заказ выполнен\n" \
-                   "\n/stats - получение статистики\n"
+                   "/finishorder - закончить формирование заказа\n" \
+                   "/closeorder - заказ выполнен\n" \
+                   "\n/stats - получить ссылку для просмотра статистики\n"
     await bot.send_message(message.chat.id, help_message)
 
 
 @dp.inline_handler(lambda query: query.query.startswith('/add'), state=UserState.making_order)
 async def inline_dishes(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
-    dishes = db_storage.get_dishes(inline_query.from_user.id)
+    date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
+    dishes = db_storage.get_dishes(inline_query.from_user.id, date_from)
     if len(parts) < 2:
         input_list = list(map(lambda dish: InlineQueryResultArticle(
             id=hashlib.md5(dish.encode()).hexdigest(),
@@ -417,10 +435,11 @@ async def inline_dishes(inline_query):
     await bot.answer_inline_query(inline_query.id, results=input_list, cache_time=1)
 
 
-@dp.inline_handler(lambda query: query.query.startswith('/addPlace'))
+@dp.inline_handler(lambda query: query.query.startswith('/addplace'))
 async def inline_places(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
-    places = db_storage.get_places(inline_query.from_user.id)
+    date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
+    places = db_storage.get_places(inline_query.from_user.id, date_from)
     if not places:
         places = [
             "Теремок. Блины", "Макдоналдс", "Бургер Кинг",
@@ -432,13 +451,13 @@ async def inline_places(inline_query):
         input_list = list(map(lambda place: InlineQueryResultArticle(
             id=hashlib.md5(place.encode()).hexdigest(),
             title=place,
-            input_message_content=InputTextMessageContent(f'/addPlace {place}')
+            input_message_content=InputTextMessageContent(f'/addplace {place}')
             ), places))
     else:
         input_list = list(map(lambda place: InlineQueryResultArticle(
             id=hashlib.md5(place.encode()).hexdigest(),
             title=place,
-            input_message_content=InputTextMessageContent(f'/addPlace {place}')
+            input_message_content=InputTextMessageContent(f'/addplace {place}')
             ), list(filter(lambda place: place.lower().startswith(parts[1].lower()), places))))
     await bot.answer_inline_query(inline_query.id, results=input_list, cache_time=1)
 
