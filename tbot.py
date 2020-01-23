@@ -400,16 +400,17 @@ async def if_stats(message: types.Message):
 
 @dp.message_handler(commands=['help'], state='*')
 async def help_command(message):
-    help_message = "Добавь меня в беседу. Потом:\n" \
+    help_message = "Добавьте меня в беседу. Потом:\n" \
+                   "Убедитесь, что у вас есть личный диалог с ботом\n" \
                    "/start - начать заказ. Нажавший - ответственный\n" \
-                   "/addplace - предложить место заказа для голосования\n" \
+                   "/addplace _место_ - предложить место заказа для голосования\n" \
                    "/startpoll - начать голосование для выбора места заказа\n" \
                    "/finishpoll - завершить голосование\n" \
                    "/cancel - отмена заказа\n" \
                    "\nПосле выбора места можно делать заказ в личном диалоге с ботом:\n" \
-                   "/add - добавить пункт заказа\n" \
-                   "/change - изменить пункт заказа\n" \
-                   "/delete - убрать пункт заказа\n" \
+                   "/add _блюдо_ - добавить пункт заказа\n" \
+                   "/change _номер_блюда_ _новое_блюдо_ - изменить пункт заказа\n" \
+                   "/delete _номер_блюда_ - убрать пункт заказа\n" \
                    "/list - вывод пунктов заказа\n" \
                    "/finish - закончить формирование заказа\n" \
                    "/status - ответственному - проверить состояние заказа\n" \
@@ -420,48 +421,30 @@ async def help_command(message):
     await bot.send_message(message.chat.id, help_message)
 
 
-@dp.inline_handler(lambda query: query.query.startswith('/add'), state=UserState.making_order)
-async def inline_dishes(inline_query):
-    parts = inline_query.query.split(' ', maxsplit=1)
-    date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
-    lst = db_storage.get_dishes(inline_query.from_user.id, date_from)
+@dp.inline_handler(lambda query: query.query.startswith('/add'), state="*")
+async def inline(inline_query):
+    if (parts[0] == '/addplace'):
+        lst = db_storage.get_places(inline_query.from_user.id)
+        comand = '/addplace '
+        if lst == []:
+            lst = ["Теремок. Блины", "Макдоналдс", "Бургер Кинг", "Баскин Роббинс", "Буше торты", "Bekitzer Бекицер", "Crispy Pizza", "Чебуречная Брынза", "Таверна Сиртаки", "Суши-бар Кидо"]
+    else:
+        lst = db_storage.get_dishes(inline_query.from_user.id, date_from)
+        comand = '/add '
     inpLst = []
     if len(parts) < 2:
         inpLst = list(map(lambda x: InlineQueryResultArticle(
             id=hashlib.md5(x.encode()).hexdigest(),
             title=x,
-            input_message_content=InputTextMessageContent('/add ' + x)
+            input_message_content=InputTextMessageContent(comand + x)
             ), lst))
     else:
         inpLst = list(map(lambda x: InlineQueryResultArticle(
             id=hashlib.md5(x.encode()).hexdigest(),
             title=x,
-            input_message_content=InputTextMessageContent('/add ' + x)
+            input_message_content=InputTextMessageContent(comand + x)
             ), list(filter(lambda x: x.lower().startswith(parts[1].lower()), lst))))
     await bot.answer_inline_query(inline_query.id, results=inpLst, cache_time=1)
-
-
-@dp.inline_handler(lambda query: query.query.startswith('/addplace'))
-async def inline_cafe(inline_query):
-    parts = inline_query.query.split(' ', maxsplit=1)
-    date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
-    lst = db_storage.get_places(inline_query.from_user.id, date_from)
-    if lst == []:
-        lst = ["Теремок. Блины", "Макдоналдс", "Бургер Кинг", "Баскин Роббинс", "Буше торты", "Bekitzer Бекицер", "Crispy Pizza", "Чебуречная Брынза", "Таверна Сиртаки", "Суши-бар Кидо"]
-    if len(parts) < 2:
-        inpLst = list(map(lambda x: InlineQueryResultArticle(
-            id=hashlib.md5(x.encode()).hexdigest(),
-            title=x,
-            input_message_content=InputTextMessageContent('/addplace ' + x)
-            ), lst))
-    else:
-        inpLst = list(map(lambda x: InlineQueryResultArticle(
-            id=hashlib.md5(x.encode()).hexdigest(),
-            title=x,
-            input_message_content=InputTextMessageContent('/addplace ' + x)
-            ), list(filter(lambda x: x.lower().startswith(parts[1].lower()), lst))))
-    await bot.answer_inline_query(inline_query.id, results=inpLst, cache_time=1)
-
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
