@@ -5,7 +5,7 @@ from aiogram.types import Message
 from .. import bot, dp, storage
 from ..model.state import ChatState
 from ..model.orderinfo import OrderInfo
-from ..utils.bill import decode_qr_bill, get_bill_data
+from ..utils import bill
 
 
 @dp.message_handler(content_types=['photo'], state='*', chat_state=[ChatState.waiting_order])
@@ -17,13 +17,13 @@ async def handle_docs_photo(message: Message):
     image_bytes = BytesIO()
     await photos[2].download(image_bytes)
 
-    bills = await decode_qr_bill(image_bytes)
+    bills = await bill.decode_qr(image_bytes)
     if len(bills) < 1:
         await bot.send_message(message.chat.id, 'Невозможно декодировать QR код.')
         return
 
     await bot.send_message(message.chat.id, 'Выполняется поиск чека...')
-    data = await get_bill_data(bills[0])
+    data = await bill.get_data(bills[0])
     if data is None:
         await bot.send_message(message.chat.id, 'Не удалось найти чек.')
         return

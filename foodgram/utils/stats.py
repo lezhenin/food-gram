@@ -1,5 +1,4 @@
-from foodgram.model.orderinfo import OrderInfo
-
+from ..model.orderinfo import OrderInfo
 from ..config import STATISTICS_SERVICE_BASE_URL
 
 
@@ -36,6 +35,6 @@ async def collect_data(bot, storage, chat_id):
         'date_delivered': order.date_delivered,
         'chosen_place': order.chosen_place,
         'suggested_places': order.places,
-        'sum': 0,
+        'sum': order.price,
         'participants': participants
     }
