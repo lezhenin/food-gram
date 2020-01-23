@@ -30,24 +30,17 @@ async def if_start_poll(message: Message):
 
     if len(order.places) == 1:
         winner_option = order.places[0]
-        inline_button_text = "Принять участие в формировании заказа"
-        inline_button_data = str(message.chat.id)
-        keyboard_markup = InlineKeyboardMarkup()
-        keyboard_markup.add(
-            InlineKeyboardButton(inline_button_text, callback_data=inline_button_data)
-        )
+        order.chosen_place = winner_option
+        keyboard_markup = make_inline_markup(message.chat.id)
         message_text = f"Только один вариант \"" + str(winner_option) + "\" был предложен."
         await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
-        order.chosen_place = winner_option
         await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
         await storage.set_state(chat=message.chat.id, state=ChatState.making_order)
         return
 
     await storage.set_state(chat=message.chat.id, state=ChatState.poll)
-
     question = "Из какого места заказать еду?"
     sent_message = await bot.send_poll(message.chat.id, question, order.places, None, None)
-
     await storage.update_data(chat=message.chat.id, data={'poll_message_id': sent_message.message_id})
 
 
@@ -59,30 +52,21 @@ async def if_show_place(message: Message):
     poll_message_id = data['poll_message_id']
     poll = await bot.stop_poll(message.chat.id, poll_message_id)
 
-    poll.options.sort(key=lambda o: o.voter_count, reverse=True)
-
-    if len(poll.options) > 1 and poll.options[0].voter_count == poll.options[1].voter_count:
-        top_options = filter(lambda o: o.voter_count == poll.options[0].voter_count, poll.options)
+    top_options = extract_winner(poll)
+    if len(top_options) > 1:
         options = "\", \"".join(map(lambda o: o.text, top_options))
-        question = "Из какого места заказать еду?"
         message_text = f"Варианты \"{options}\" набрали наибольшее количество голосов. " \
                        "Необходимо провести повторное голосование."
         await bot.send_message(message.chat.id, message_text)
+        question = "Из какого места заказать еду?"
         sent_message = await bot.send_poll(message.chat.id, question, order.places, None, None)
         await storage.update_data(chat=message.chat.id, data={'poll_message_id': sent_message.message_id})
         return
 
-    winner_option = poll.options[0]
+    winner_option = top_options[0]
     order.chosen_place = winner_option.text
 
-    inline_button_text = "Принять участие в формировании заказа"
-    inline_button_data = str(message.chat.id)
-
-    keyboard_markup = InlineKeyboardMarkup()
-    keyboard_markup.add(
-        InlineKeyboardButton(inline_button_text, callback_data=inline_button_data)
-    )
-
+    keyboard_markup = make_inline_markup(message.chat.id)
     message_text = f"Вариант \"{winner_option.text}\" набрал наибольшее количество голосов."
     await bot.send_message(message.chat.id, message_text, reply_markup=keyboard_markup)
 
@@ -93,3 +77,21 @@ async def if_show_place(message: Message):
     if 'poll_message_id' in data:
         data.pop('poll_message_id')
     await storage.set_data(chat=message.chat.id, data=data)
+
+
+def extract_winner(poll):
+    options = sorted(poll.options, key=lambda o: o.voter_count, reverse=True)
+    if not options:
+        return []
+    top_options = filter(lambda o: o.voter_count == options[0].voter_count, options)
+    return list(top_options)
+
+
+def make_inline_markup(chat_id):
+    inline_button_text = "Принять участие в формировании заказа"
+    inline_button_data = str(chat_id)
+    keyboard_markup = InlineKeyboardMarkup()
+    keyboard_markup.add(
+        InlineKeyboardButton(inline_button_text, callback_data=inline_button_data)
+    )
+    return keyboard_markup

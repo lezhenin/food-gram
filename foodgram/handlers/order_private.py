@@ -25,11 +25,11 @@ async def if_add_in_private(message: Message):
     state='*', user_state=[UserState.making_order, UserState.finish_order]
 )
 async def if_delete_in_private(message: Message):
-    parts = message.text.split(' ', maxsplit=1)
-    if len(parts) < 2:
+    index = message.get_args()
+    if not index:
         return
 
-    index = int(parts[1])
+    index = int(index)
     data = await storage.get_data(user=message.from_user.id)
     dishes = data.get('dishes', [])
     if index - 1 < len(dishes):
@@ -43,11 +43,8 @@ async def if_delete_in_private(message: Message):
 )
 async def if_change_in_private(message: Message):
     args = message.get_args()
-    parts = args.split(' ', maxsplit=1)
-    if len(parts) < 2:
-        return
-    index = int(parts[0])
-    dish = parts[1]
+    index, dish = args.split(' ', maxsplit=1)
+    index = int(index)
 
     data = await storage.get_data(user=message.from_user.id)
     dishes = data.get('dishes', [])

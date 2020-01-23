@@ -7,6 +7,7 @@ from ..model.state import ChatState, UserState
 from ..model.orderinfo import OrderInfo
 from ..utils import stats
 
+
 # None is default value of chat_state, todo initialize with idle
 @dp.message_handler(commands=['start'], chat_type='group', chat_state=[ChatState.idle, None])
 async def if_start(message: Message):
