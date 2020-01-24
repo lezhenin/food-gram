@@ -92,8 +92,15 @@ async def if_cancel(message: Message):
     await bot.send_message(message.chat.id, message_text)
 
 
-@dp.callback_query_handler(user_state=[UserState.idle, None])
-async def inline_kb_answer_callback_handler(query: CallbackQuery):
+@dp.callback_query_handler(state='*', user_state='*')
+async def inline_kb_answer_callback_handler(query: CallbackQuery, user_state):
+
+    print(user_state)
+    if user_state not in [None, UserState.idle]:
+        message_text = f"Вы уже принимаете участие в формировании заказа."
+        await bot.send_message(query.from_user.id, message_text)
+        return
+
     chat = await bot.get_chat(chat_id=query.data)
     data = await storage.get_data(chat=chat.id)
     order = OrderInfo(**data['order'])
@@ -102,6 +109,7 @@ async def inline_kb_answer_callback_handler(query: CallbackQuery):
     await storage.update_data(chat=chat.id, data={'order': OrderInfo.as_dict(order)})
 
     await storage.set_state(user=query.from_user.id, state=UserState.making_order)
+    print(query.from_user.id)
     await storage.update_data(user=query.from_user.id, data={'order_chat_id': chat.id})
 
     message_text = f"Вы приняли участие в формировании заказа, созданного в \"{chat.title}\""
