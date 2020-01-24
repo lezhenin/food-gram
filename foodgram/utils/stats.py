@@ -1,14 +1,13 @@
-from orderinfo import OrderInfo
-
-STATS_URL = 'http://localhost:4200'
+from ..model.orderinfo import OrderInfo
+from ..config import STATISTICS_SERVICE_BASE_URL
 
 
 def get_chat_url(chat_id):
-    return f'{STATS_URL}/chat/{chat_id}'
+    return f'{STATISTICS_SERVICE_BASE_URL}/chat/{chat_id}'
 
 
 def get_user_url(user_id):
-    return f'{STATS_URL}/user/{user_id}'
+    return f'{STATISTICS_SERVICE_BASE_URL}/user/{user_id}'
 
 
 async def collect_data(bot, storage, chat_id):
@@ -36,6 +35,6 @@ async def collect_data(bot, storage, chat_id):
         'date_delivered': order.date_delivered,
         'chosen_place': order.chosen_place,
         'suggested_places': order.places,
-        'sum': 0,
+        'sum': order.price,
         'participants': participants
     }
