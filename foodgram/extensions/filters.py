@@ -3,6 +3,11 @@ from typing import Union, Optional, Any, Dict
 
 from aiogram.types import Message, CallbackQuery, InlineQuery, ChatType
 
+def unwrap_query(obj):
+    if isinstance(obj, CallbackQuery):
+        return obj
+    else:
+        return None
 
 def unwrap_message(obj):
     if isinstance(obj, Message):
@@ -31,7 +36,12 @@ class UserStateFilter(AbstractFilter):
 
         self.dispatcher = dispatcher
         self.negate = user_state is None
-        self.chat_states_to_check = wrap_list(user_state if not self.negate else user_state_not)
+
+        if isinstance(user_state, str) and user_state == '*':
+            self.chat_states_to_check = []
+            self.negate = not self.negate
+        else:
+            self.chat_states_to_check = wrap_list(user_state if not self.negate else user_state_not)
 
     @classmethod
     def validate(cls, full_config):
@@ -46,11 +56,16 @@ class UserStateFilter(AbstractFilter):
         return result
 
     async def check(self, obj):
-        message = unwrap_message(obj)
-        if message is None:
-            return False
 
-        user_id = message.from_user.id
+        query = unwrap_query(obj)
+        if query is None:
+            message = unwrap_message(obj)
+            if message is None:
+                return False
+            else:
+                user_id = message.from_user.id
+        else:
+            user_id = query.from_user.id
 
         current_state = await self.dispatcher.storage.get_state(user=user_id)
 
@@ -138,6 +153,9 @@ class OrderOwnerFilter(AbstractFilter):
             chat_id = data['order_chat_id']
 
         data = await self.dispatcher.storage.get_data(chat=chat_id)
+
+        if 'order' not in data:
+            return False
 
         owner_user_id = data['order']['owner_user_id']
         return user_id == owner_user_id
