@@ -6,7 +6,7 @@ from PIL import Image
 from utils.concurrent import run_blocking
 
 BILL_DATABASE_URL = 'https://proverkacheka.nalog.ru:9999/v1'
-PASSWORD = 'Kzc5MTE5OTEyOTcxOjQ1ODQzMw=='
+PASSWORD = 'Kzc5MTEyNDAxNzkxOjc3MDU3Nw=='
 
 
 async def is_bill_exist(bill):

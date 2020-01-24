@@ -4,11 +4,11 @@ STATS_URL = 'http://localhost:4200'
 
 
 def get_chat_url(chat_id):
-    return f'{STATS_URL}/chat/chat_id={chat_id}'
+    return f'{STATS_URL}/chat/{chat_id}'
 
 
 def get_user_url(user_id):
-    return f'{STATS_URL}/user/user_id={user_id}'
+    return f'{STATS_URL}/user/{user_id}'
 
 
 async def collect_data(bot, storage, chat_id):
