@@ -41,6 +41,5 @@ async def handle_docs_photo(message: Message):
 
     data_from_db = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data_from_db['order'])
-    print(order)
     order.price = data['document']['receipt']['totalSum']
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
