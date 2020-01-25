@@ -15,7 +15,11 @@ async def handle_docs_photo(message: Message):
         return
 
     image_bytes = BytesIO()
-    await photos[2].download(image_bytes)
+    a = photos[0]
+    for i in range(len(photos[1:len(photos)])):
+        if a.file_size < photos[i].file_size:
+            a = photos[i]
+    await a.download(image_bytes)
 
     bills = await bill.decode_qr(image_bytes)
     if len(bills) < 1:
@@ -37,5 +41,6 @@ async def handle_docs_photo(message: Message):
 
     data_from_db = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data_from_db['order'])
+    print(order)
     order.price = data['document']['receipt']['totalSum']
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
