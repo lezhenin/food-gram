@@ -35,8 +35,7 @@ async def if_finish_order(message: Message):
     order = OrderInfo(**data['order'])
     order.date_finished = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
-
-    message_text = ''
+    message_text = f'Заказ из ресторана \'{order.chosen_place}\'\n\n'
     for user in order.participants:
         user_chat = await bot.get_chat(chat_id=user)
         user_data = await storage.get_data(user=user)
@@ -94,10 +93,11 @@ async def if_cancel(message: Message):
 
 @dp.callback_query_handler(state='*', user_state='*')
 async def inline_kb_answer_callback_handler(query: CallbackQuery, user_state):
-
-    print(user_state)
     if user_state not in [None, UserState.idle]:
-        message_text = f"Вы уже принимаете участие в формировании заказа."
+        data = await storage.get_data(user=query.from_user.id)
+        chat_id = data['order_chat_id']
+        chat = await bot.get_chat(chat_id=chat_id)
+        message_text = f"Вы уже принимаете участие в формировании заказа в \"{chat.title}\"."
         await bot.send_message(query.from_user.id, message_text)
         return
 
