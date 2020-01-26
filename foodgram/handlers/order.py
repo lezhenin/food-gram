@@ -35,14 +35,19 @@ async def if_finish_order(message: Message):
     order = OrderInfo(**data['order'])
     order.date_finished = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
-    message_text = f'Заказ из ресторана \'{order.chosen_place}\'\n\n'
-    for user in order.participants:
-        user_chat = await bot.get_chat(chat_id=user)
-        user_data = await storage.get_data(user=user)
-        message_text += f'Пользователь \'{user_chat.full_name}\' заказал:\n'
-        for i, dish in enumerate(user_data['dishes']):
-            message_text += f'{i + 1}. {dish}\n'
-        message_text += '\n'
+    if len(order.participants) == 0:
+        message_text = f'Заказ из ресторана \'{order.chosen_place}\' пуст.'
+    else:
+        message_text = f'Заказ из ресторана \'{order.chosen_place}\'\n\n'
+        for user in order.participants:
+            user_chat = await bot.get_chat(chat_id=user)
+            user_data = await storage.get_data(user=user)
+            if 'dishes' in user_data:
+                if len(user_data['dishes']) > 0:
+                    message_text += f'Пользователь \'{user_chat.full_name}\' заказал:\n'
+                    for i, dish in enumerate(user_data['dishes']):
+                        message_text += f'{i + 1}. {dish}\n'
+                    message_text += '\n'
     await bot.send_message(message.from_user.id, message_text)
 
     await storage.set_state(chat=message.chat.id, state=ChatState.waiting_order)
@@ -77,7 +82,7 @@ async def if_close_order(message: Message):
     await storage.reset_state(chat=message.chat.id, with_data=True)
 
 
-@dp.message_handler(commands='cancel', chat_type='group', is_order_owner=True, chat_state_not=[ChatState.idle, None])
+@dp.message_handler(commands='cancelorder', chat_type='group', is_order_owner=True, chat_state_not=[ChatState.idle, None])
 async def if_cancel(message: Message):
     data = await storage.get_data(chat=message.chat.id)
     if 'order' in data:

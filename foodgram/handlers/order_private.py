@@ -1,6 +1,7 @@
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from .. import dp, bot, storage
+from ..model.orderinfo import OrderInfo
 from foodgram.model.state import UserState
 
 def make_keyboard():
@@ -75,7 +76,6 @@ async def if_list_in_private(message: Message):
     message_text = 'Блюда в заказе:\n' + '\n'.join(dishes) if (len(dishes) > 0) else 'Ваш заказ пуст'
     await bot.send_message(message.from_user.id, message_text, reply_markup=make_keyboard())
 
-# todo finishing empty order
 @dp.message_handler(
     commands=['finish'], chat_type='private', state='*',
     user_state=[UserState.making_order, UserState.finish_order]
@@ -87,10 +87,10 @@ async def if_finish_in_private(message: Message):
     if len(dishes) > 0:
         message_text = 'Заказ завершен. Блюда в заказе:\n' + '\n'.join(dishes)
         await storage.set_state(user=message.from_user.id, state=UserState.finish_order)
+        await bot.send_message(message.from_user.id, message_text)
     else:
-        message_text = 'Вы ничего не добавили в заказ.'
-
-    await bot.send_message(message.from_user.id, message_text)
+        message_text = 'Вы ничего не добавили в заказ. Вы можете отменить заказ командой /cancel'
+        await bot.send_message(message.from_user.id, message_text, reply_markup=make_keyboard())
 
 
 @dp.message_handler(
@@ -113,7 +113,21 @@ async def if_status_in_private(message: Message):
 
     await bot.send_message(message.from_user.id, message_text)
 
-# todo cancel for private chat
+@dp.message_handler(
+    commands=['cancel'], chat_type='private', state='*',
+    user_state=[UserState.making_order, UserState.finish_order]
+)
+async def if_cancel_in_private(message: Message):
+    data = await storage.get_data(user=message.from_user.id)
+    chat_id = data['order_chat_id']
+    chat = await bot.get_chat(chat_id=chat_id)
+    await storage.reset_state(user=message.from_user.id, with_data=True)
+    data = await storage.get_data(chat=chat.id)
+    order = OrderInfo(**data['order'])
+    order.remove_participant(message.from_user.id)
+    await storage.update_data(chat=chat.id, data={'order': OrderInfo.as_dict(order)})
+    message_text = f'Ваш заказ в \"{chat.title}\" отменен.'
+    await bot.send_message(message.from_user.id, message_text)
 
 
 
