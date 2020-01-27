@@ -57,14 +57,15 @@ async def clean_data_and_state(chat_id):
     commands=['start'], chat_type='group', chat_state=[ChatState.idle, None]
 )
 async def if_start(message: Message):
-    order_info = OrderInfo.from_message(message)
-    order_info.date_started = timestamp()
-    await storage.set_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order_info)})
-    await storage.set_state(chat=message.chat.id, state=ChatState.gather_places)
 
     user_data = await storage.get_data(user=message.from_user.id)
     if await check_is_taking_part(message.from_user.id, user_data):
         return
+
+    order_info = OrderInfo.from_message(message)
+    order_info.date_started = timestamp()
+    await storage.set_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order_info)})
+    await storage.set_state(chat=message.chat.id, state=ChatState.gather_places)
 
     user_data['owned_order_chat_id'] = message.chat.id
     await storage.update_data(user=message.from_user.id, data=user_data)
