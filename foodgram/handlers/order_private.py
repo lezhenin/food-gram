@@ -12,7 +12,7 @@ def make_keyboard():
     return keyboard_markup
 
 @dp.message_handler(
-    commands=['add'], chat_type='private', state='*',
+    commands=['add'], chat_type='private', state='*', is_order_participant=True,
     user_state=[UserState.making_order, UserState.finish_order]
 )
 async def if_add_in_private(message: Message):
@@ -94,12 +94,11 @@ async def if_finish_in_private(message: Message):
 
 
 @dp.message_handler(
-    commands=['status'], chat_type='private', is_order_owner=True, state='*',
-    user_state=[UserState.making_order, UserState.finish_order]
+    commands=['status'], chat_type='private', is_order_owner=True, state='*'
 )
 async def if_status_in_private(message: Message):
     data = await storage.get_data(user=message.from_user.id)
-    chat_id = data['order_chat_id']
+    chat_id = data['owned_order_chat_id']
     data = await storage.get_data(chat=chat_id)
     message_text = ''
     participants = data['order']['participants']
@@ -113,6 +112,7 @@ async def if_status_in_private(message: Message):
 
     await bot.send_message(message.from_user.id, message_text)
 
+
 @dp.message_handler(
     commands=['cancel'], chat_type='private', state='*',
     user_state=[UserState.making_order, UserState.finish_order]
@@ -122,6 +122,7 @@ async def if_cancel_in_private(message: Message):
     chat_id = data['order_chat_id']
     chat = await bot.get_chat(chat_id=chat_id)
     await storage.reset_state(user=message.from_user.id, with_data=True)
+    await storage.reset_state(chat_id=chat.id, user=message.from_user.id, with_data=True)
     data = await storage.get_data(chat=chat.id)
     order = OrderInfo(**data['order'])
     order.remove_participant(message.from_user.id)
