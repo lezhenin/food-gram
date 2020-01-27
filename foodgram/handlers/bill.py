@@ -1,4 +1,5 @@
 from io import BytesIO
+from difflib import get_close_matches
 
 from aiogram.types import Message
 
@@ -35,17 +36,13 @@ async def handle_docs_photo(message: Message):
         return
     items = data['document']['receipt']['items']
 
-    message_text = ''
     num = 0
     items_to_bd = list()
     for item in items:
         name, quantity, sum = item['name'], item['quantity'], item['sum']
         txt = str(num) + f'. \'{name}\' place {quantity} == {sum / 100.0}\n'
-        message_text += txt
         items_to_bd.append(txt)
         num = num + 1
-
-    await bot.send_message(message.chat.id, message_text)
 
     data_from_db = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data_from_db['order'])
@@ -54,6 +51,46 @@ async def handle_docs_photo(message: Message):
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
     await storage.set_state(user=message.from_user.id, state=UserState.checking_bill)
 
+    names = []
+    for item in items:
+        quant = item['quantity']
+        while quant > 0:
+            names.append(item['name'])
+            quant = quant - 1
+
+    message_text = ''
+    print(items)
+    data_from_db = await storage.get_data(chat=message.chat.id)
+    order = OrderInfo(**data_from_db['order'])
+    for user in order.participants:
+        sum = 0
+        user_chat = await bot.get_chat(chat_id=user)
+        user_data = await storage.get_data(user=user)
+        message_text += f'Пользователь \'{user_chat.full_name}\' заказал:\n'
+        i = 1
+        for dish in user_data['dishes']:
+            output = get_close_matches(dish, names, n=1, cutoff=0.60)
+            if output:
+                names.remove(output[0])
+                for item in items:
+                    if item['name'] == output[0]:
+                        name = item['name']
+                        price = item['price']
+                        message_text += f'{i}. {name} = {price/100.0}\n'
+                        i += 1
+                        item['quantity'] -= 1
+                        item['sum'] -= item['price']
+                        sum += item['price']
+                        break
+        message_text += f'Итого {sum / 100.0}\n\n'
+    message_text += 'Не удалось распознать:\n'
+    i = 1
+    for item in items:
+        if item['quantity'] > 0:
+            name, quantity, sum = item['name'], item['quantity'], item['sum']
+            message_text += str(i) + f'. \'{name}\' place {quantity} == {sum / 100.0}\n'
+            i += 1
+    await bot.send_message(message.chat.id, message_text)
 
 
 @dp.message_handler(commands=['addbill'], chat_type='group', state='*',
@@ -68,8 +105,6 @@ async def add_bill_item(message: Message):
     for p in positions:
         del items[int(p)]
     await bot.send_message(message.chat.id, items)
-
-
 
 
 
