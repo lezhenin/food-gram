@@ -83,12 +83,11 @@ async def if_finish_in_private(message: Message):
 
 
 @dp.message_handler(
-    commands=['status'], chat_type='private', is_order_owner=True, state='*',
-    user_state=[UserState.making_order, UserState.finish_order]
+    commands=['status'], chat_type='private', is_order_owner=True, state='*'
 )
 async def if_status_in_private(message: Message):
     data = await storage.get_data(user=message.from_user.id)
-    chat_id = data['order_chat_id']
+    chat_id = data['owned_order_chat_id']
     data = await storage.get_data(chat=chat_id)
     message_text = ''
     participants = data['order']['participants']
