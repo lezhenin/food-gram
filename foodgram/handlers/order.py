@@ -15,7 +15,8 @@ def timestamp():
 async def check_is_owner(user_id, user_data, exclude_chat_id=None):
     if 'owned_order_chat_id' in user_data:
         if exclude_chat_id is None or user_data['owned_order_chat_id'] != exclude_chat_id:
-            message_text = 'Вы уже являетесь иницатором заказа.'
+            chat = await bot.get_chat(user_data['owned_order_chat_id'])
+            message_text = f'Вы уже являетесь иницатором заказа в чате {chat.title}.'
             await bot.send_message(user_id, message_text)
             return True
     return False
@@ -23,7 +24,8 @@ async def check_is_owner(user_id, user_data, exclude_chat_id=None):
 
 async def check_is_participant(user_id, user_data):
     if 'order_chat_id' in user_data:
-        message_text = 'Вы уже являетесь участником заказа.'
+        chat = await bot.get_chat(user_data['order_chat_id'])
+        message_text = f'Вы уже являетесь участником заказа в чате {chat.title}.'
         await bot.send_message(user_id, message_text)
         return True
     return False
