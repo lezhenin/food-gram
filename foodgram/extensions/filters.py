@@ -186,6 +186,47 @@ class OrderOwnerFilter(AbstractFilter):
         return user_id == owner_user_id
 
 
+class OrderParticipantFilter(AbstractFilter):
+
+    def __init__(self, dispatcher, is_order_participant):
+        if is_order_participant is False:
+            raise ValueError("is_order_participant cannot be False")
+
+        self.dispatcher = dispatcher
+
+    @classmethod
+    def validate(cls, full_config):
+        result = {}
+        if "is_order_participant" in full_config:
+            result["is_order_participant"] = full_config.pop("is_order_participant")
+        return result
+
+    async def check(self, obj):
+        message = unwrap_message(obj)
+        if message is None:
+            return False
+
+        user_id = get_user_id(obj)
+        if user_id is None:
+            return False
+
+        if message.chat.type == 'private':
+            data = await self.dispatcher.storage.get_data(user=user_id)
+            if 'order_chat_id' not in data:
+                return False
+            chat_id = data['order_chat_id']
+        else:
+            chat_id = message.chat.id
+
+        data = await self.dispatcher.storage.get_data(chat=chat_id)
+
+        if 'order' not in data:
+            return False
+
+        participants_user_ids = data['order']['participants']
+        return user_id in participants_user_ids
+
+
 class ChatTypeFilter(AbstractFilter):
 
     def __init__(self, chat_type):

@@ -5,7 +5,7 @@ from foodgram.model.state import UserState
 
 
 @dp.message_handler(
-    commands=['add'], chat_type='private', state='*',
+    commands=['add'], chat_type='private', state='*', is_order_participant=True,
     user_state=[UserState.making_order, UserState.finish_order]
 )
 async def if_add_in_private(message: Message):
