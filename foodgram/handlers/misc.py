@@ -37,8 +37,8 @@ async def help_command(message):
                    "/cancel - отмена заказа\n" \
                    "\nПосле выбора места можно делать заказ в личном диалоге с ботом:\n" \
                    "/add <блюдо> - добавить пункт заказа\n" \
-                   "/change <номер_блюда> <новое_блюдо> - изменить пункт заказа\n" \
-                   "/delete <номер_блюда> - убрать пункт заказа\n" \
+                   "/change <номер\_блюда> <новое\_блюдо> - изменить пункт заказа\n" \
+                   "/delete <номер\_блюда> - убрать пункт заказа\n" \
                    "/list - вывод пунктов заказа\n" \
                    "/finish - закончить формирование заказа\n" \
                    "/status - ответственному - проверить состояние заказа\n" \
@@ -46,4 +46,4 @@ async def help_command(message):
                    "/finishorder - закончить формирование заказа\n" \
                    "/closeorder - заказ выполнен\n" \
                    "\n/stats - получить ссылку для просмотра статистики\n"
-    await bot.send_message(message.chat.id, help_message)
+    await bot.send_message(message.chat.id, help_message, parse_mode='Markdown')

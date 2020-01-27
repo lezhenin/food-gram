@@ -1,7 +1,7 @@
-from aiogram.dispatcher.filters import BoundFilter, AbstractFilter
-from typing import Union, Optional, Any, Dict
+from aiogram.dispatcher.filters import AbstractFilter
 
-from aiogram.types import Message, CallbackQuery, InlineQuery, ChatType
+from aiogram.types import Message, CallbackQuery
+
 
 def unwrap_query(obj):
     if isinstance(obj, CallbackQuery):
@@ -9,11 +9,30 @@ def unwrap_query(obj):
     else:
         return None
 
+
 def unwrap_message(obj):
     if isinstance(obj, Message):
         return obj
     elif isinstance(obj, CallbackQuery) and obj.message:
         return obj.message
+    else:
+        return None
+
+
+def get_user_id(obj):
+    if isinstance(obj, Message):
+        return obj.from_user.id
+    elif isinstance(obj, CallbackQuery):
+        return obj.from_user.id
+    else:
+        return None
+
+
+def get_chat_id(obj):
+    if isinstance(obj, Message):
+        return obj.chat.id
+    elif isinstance(obj, CallbackQuery) and obj.message:
+        return obj.message.chat.id
     else:
         return None
 
@@ -35,13 +54,13 @@ class UserStateFilter(AbstractFilter):
             raise ValueError("user_state and user_state_not cannot be not None simultaneously")
 
         self.dispatcher = dispatcher
-        self.negate = user_state is None
 
+        self.all_pass = False
         if isinstance(user_state, str) and user_state == '*':
-            self.chat_states_to_check = []
-            self.negate = not self.negate
-        else:
-            self.chat_states_to_check = wrap_list(user_state if not self.negate else user_state_not)
+            self.all_pass = True
+
+        self.negate = user_state_not is not None
+        self.chat_states_to_check = wrap_list(user_state if not self.negate else user_state_not)
 
     @classmethod
     def validate(cls, full_config):
@@ -57,17 +76,14 @@ class UserStateFilter(AbstractFilter):
 
     async def check(self, obj):
 
-        query = unwrap_query(obj)
-        if query is None:
-            message = unwrap_message(obj)
-            if message is None:
-                return False
-            else:
-                user_id = message.from_user.id
+        user_id = get_user_id(obj)
+        if user_id is None:
+            current_state = None
         else:
-            user_id = query.from_user.id
+            current_state = await self.dispatcher.storage.get_state(user=user_id)
 
-        current_state = await self.dispatcher.storage.get_state(user=user_id)
+        if self.all_pass:
+            return {'user_state': current_state}
 
         if current_state in self.chat_states_to_check and self.negate:
             return False
@@ -88,6 +104,10 @@ class ChatStateFilter(AbstractFilter):
         if chat_state is not None and chat_state_not is not None:
             raise ValueError("chat_state and chat_state_not cannot be not None simultaneously")
 
+        self.all_pass = False
+        if isinstance(chat_state, str) and chat_state == '*':
+            self.all_pass = True
+
         self.dispatcher = dispatcher
         self.negate = chat_state is None
         self.chat_states_to_check = wrap_list(chat_state if not self.negate else chat_state_not)
@@ -105,13 +125,15 @@ class ChatStateFilter(AbstractFilter):
         return result
 
     async def check(self, obj):
-        message = unwrap_message(obj)
-        if message is None:
-            return False
 
-        chat_id = message.chat.id
+        chat_id = get_chat_id(obj)
+        if chat_id is None:
+            current_state = None
+        else:
+            current_state = await self.dispatcher.storage.get_state(chat=chat_id, user=None)
 
-        current_state = await self.dispatcher.storage.get_state(chat=chat_id, user=None)
+        if self.all_pass:
+            return {'chat_state': current_state}
 
         if current_state in self.chat_states_to_check and self.negate:
             return False
@@ -141,16 +163,19 @@ class OrderOwnerFilter(AbstractFilter):
     async def check(self, obj):
         message = unwrap_message(obj)
         if message is None:
-            return
+            return False
 
-        user_id = obj.from_user.id
-        chat_id = message.chat.id
+        user_id = get_user_id(obj)
+        if user_id is None:
+            return False
 
         if message.chat.type == 'private':
             data = await self.dispatcher.storage.get_data(user=user_id)
-            if 'order_chat_id' not in data:
+            if 'owned_order_chat_id' not in data:
                 return False
-            chat_id = data['order_chat_id']
+            chat_id = data['owned_order_chat_id']
+        else:
+            chat_id = message.chat.id
 
         data = await self.dispatcher.storage.get_data(chat=chat_id)
 
@@ -159,6 +184,47 @@ class OrderOwnerFilter(AbstractFilter):
 
         owner_user_id = data['order']['owner_user_id']
         return user_id == owner_user_id
+
+
+class OrderParticipantFilter(AbstractFilter):
+
+    def __init__(self, dispatcher, is_order_participant):
+        if is_order_participant is False:
+            raise ValueError("is_order_participant cannot be False")
+
+        self.dispatcher = dispatcher
+
+    @classmethod
+    def validate(cls, full_config):
+        result = {}
+        if "is_order_participant" in full_config:
+            result["is_order_participant"] = full_config.pop("is_order_participant")
+        return result
+
+    async def check(self, obj):
+        message = unwrap_message(obj)
+        if message is None:
+            return False
+
+        user_id = get_user_id(obj)
+        if user_id is None:
+            return False
+
+        if message.chat.type == 'private':
+            data = await self.dispatcher.storage.get_data(user=user_id)
+            if 'order_chat_id' not in data:
+                return False
+            chat_id = data['order_chat_id']
+        else:
+            chat_id = message.chat.id
+
+        data = await self.dispatcher.storage.get_data(chat=chat_id)
+
+        if 'order' not in data:
+            return False
+
+        participants_user_ids = data['order']['participants']
+        return user_id in participants_user_ids
 
 
 class ChatTypeFilter(AbstractFilter):
