@@ -90,7 +90,7 @@ async def handle_docs_photo(message: Message):
     message_text = bill_to_str(matched_bill)
     await bot.send_message(message.chat.id, message_text, reply_markup=make_keyboard())
 
-@dp.message_handler(commands='recognizeitem', chat_type='group',chat_state=ChatState.checking_bill)
+@dp.message_handler(commands='take', chat_type='group',chat_state=ChatState.checking_bill)
 async def if_add_to_bill(message: Message):
     arg = message.get_args()
     data_from_db = await storage.get_data(chat=message.chat.id)
@@ -111,7 +111,7 @@ async def if_add_to_bill(message: Message):
     message_text = bill_to_str(order.bill)
     await bot.send_message(message.chat.id, message_text, reply_markup=make_keyboard())
 
-@dp.message_handler(commands='cancelrecognition', chat_type='group', chat_state=ChatState.checking_bill)
+@dp.message_handler(commands='drop', chat_type='group', chat_state=ChatState.checking_bill)
 async def if_add_to_bill(message: Message):
     arg = message.get_args()
     data_from_db = await storage.get_data(chat=message.chat.id)
@@ -162,8 +162,8 @@ def make_positions_list(items):
     return names
 
 def make_keyboard():
-    add_button = InlineKeyboardButton("Опознать блюдо", switch_inline_query_current_chat='/recognizeitem ')
-    delete_button = InlineKeyboardButton("Неверное распознавание", switch_inline_query_current_chat='/cancelrecognition ')
+    add_button = InlineKeyboardButton("Опознать блюдо", switch_inline_query_current_chat='/take ')
+    delete_button = InlineKeyboardButton("Неверное распознавание", switch_inline_query_current_chat='/drop ')
     keyboard_markup = InlineKeyboardMarkup()
     keyboard_markup.row(add_button)
     keyboard_markup.row(delete_button)

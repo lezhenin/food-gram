@@ -34,7 +34,7 @@ async def inline(inline_query):
             ), list(filter(lambda x: x.lower().startswith(parts[1].lower()), lst))))
     await bot.answer_inline_query(inline_query.id, results=inpLst, cache_time=1)
 
-@dp.inline_handler(lambda query: query.query.startswith('/recognizeitem'), state="*")
+@dp.inline_handler(lambda query: query.query.startswith('/take'), state="*")
 async def inline_add_to_bill(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
     user_data = await db_storage.get_data(user=inline_query.from_user.id)
@@ -42,14 +42,14 @@ async def inline_add_to_bill(inline_query):
     lst = []
     for item in data['order']['bill']['other']:
         lst.append(item['name'])
-    command = 'recognizeitem'
+    command = 'take'
     if len(parts) < 2:
         input_list = make_input_list(lst, command)
     else:
         input_list = make_input_list(find_by_prefix(lst, parts[1]), command)
     await bot.answer_inline_query(inline_query.id, results=input_list, cache_time=1)
 
-@dp.inline_handler(lambda query: query.query.startswith('/cancelrecognition'), state="*")
+@dp.inline_handler(lambda query: query.query.startswith('/drop'), state="*")
 async def inline_add_to_bill(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
     user_data = await db_storage.get_data(user=inline_query.from_user.id)
@@ -59,7 +59,7 @@ async def inline_add_to_bill(inline_query):
         if person['user_id'] == inline_query.from_user.id:
             for item in person['items']:
                 lst.append(item['name'])
-    command = 'cancelrecognition'
+    command = 'drop'
     if len(parts) < 2:
         input_list = make_input_list(lst, command)
     else:
