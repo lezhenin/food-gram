@@ -12,27 +12,28 @@ def timestamp():
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 
-async def check_is_owner(user_id, user_data):
+async def check_is_owner(user_id, user_data, exclude_chat_id=None):
     if 'owned_order_chat_id' in user_data:
-        message_text = 'Вы уже являетесь иницатором заказа в другом чате.'
-        await bot.send_message(user_id, message_text)
-        return True
+        if exclude_chat_id is None or user_data['owned_order_chat_id'] != exclude_chat_id:
+            message_text = 'Вы уже являетесь иницатором заказа.'
+            await bot.send_message(user_id, message_text)
+            return True
     return False
 
 
 async def check_is_participant(user_id, user_data):
     if 'order_chat_id' in user_data:
-        message_text = 'Вы уже являетесь участником заказа в другом чате.'
+        message_text = 'Вы уже являетесь участником заказа.'
         await bot.send_message(user_id, message_text)
         return True
     return False
 
 
-async def check_is_taking_part(user_id, user_data=None):
+async def check_is_taking_part(user_id, user_data=None, exclude_chat_id=None):
     if user_data is None:
         user_data = await storage.get_data(user=user_id)
     taking_part = await check_is_participant(user_id, user_data) or \
-                  await check_is_owner(user_id, user_data)
+                  await check_is_owner(user_id, user_data, exclude_chat_id)
     return taking_part
 
 
@@ -141,7 +142,7 @@ async def if_cancel(message: Message):
 async def inline_kb_answer_callback_handler(query: CallbackQuery):
 
     user_data = await storage.get_data(user=query.from_user.id)
-    if await check_is_taking_part(query.from_user.id, user_data):
+    if await check_is_taking_part(query.from_user.id, user_data, query.message.chat.id):
         return
 
     chat = await bot.get_chat(chat_id=query.data)
