@@ -1,7 +1,7 @@
 from io import BytesIO
 from difflib import get_close_matches
 
-from aiogram.types import Message
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from .. import bot, dp, storage
 from ..model.state import ChatState
@@ -51,60 +51,120 @@ async def handle_docs_photo(message: Message):
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
     await storage.set_state(user=message.from_user.id, state=UserState.checking_bill)
 
+    await storage.set_state(chat=message.chat.id, state=UserState.checking_bill)
+    data_from_db = await storage.get_data(chat=message.chat.id)
+    order = OrderInfo(**data_from_db['order'])
+    names = make_positions_list(items)
+    matched_bill = {'matched': [], 'other': []}
+    for user in order.participants:
+        matched_dish = []
+        user_chat = await bot.get_chat(chat_id=user)
+        user_data = await storage.get_data(user=user)
+        for dish in user_data['dishes']:
+            # get_close_matches(word, posibilities, n, cutoff)
+            # 'word' is the word for which you want to find close matches
+            # 'posibilities' is a list of sequences against which to match the word
+            # [optional] 'n' is maximum number of close matches
+            # [optional] 'cutoff' - where to stop considering a word as a match
+            # (0.99 being the closest to word while 0.0 being otherwise)
+            output = get_close_matches(dish, names, n=1, cutoff=0.60)
+            if output:
+                names.remove(output[0])
+                for item in items:
+                    if item['name'] == output[0]:
+                        name, price = item['name'], item['price']
+                        matched_dish.append({'name': name, 'price': price})
+                        item['quantity'] -= 1
+                        item['sum'] -= item['price']
+                        break
+        matched_bill['matched'].append({'user_id': user, 'username': user_chat.full_name, 'items': matched_dish})
+    for item in items:
+        if item['quantity'] > 0:
+            name, quantity, sum, price = item['name'], item['quantity'], item['sum'], item['price']
+            matched_bill['other'].append({'name': name, 'quantity': quantity, 'sum': sum, 'price': price})
+
+    data_from_db = await storage.get_data(chat=message.chat.id)
+    order = OrderInfo(**data_from_db['order'])
+    order.bill = matched_bill
+    await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
+    message_text = bill_to_str(matched_bill)
+    await bot.send_message(message.chat.id, message_text, reply_markup=make_keyboard())
+
+@dp.message_handler(commands='recognizeitem', chat_type='group',chat_state=ChatState.checking_bill)
+async def if_add_to_bill(message: Message):
+    arg = message.get_args()
+    data_from_db = await storage.get_data(chat=message.chat.id)
+    order = OrderInfo(**data_from_db['order'])
+    for item in order.bill['other']:
+        if item['name'].strip() == arg.strip():
+            position = item
+            for person in order.bill['matched']:
+                if person['user_id'] == message.from_user.id:
+                    person['items'].append({'name':position['name'], 'price': position['price']})
+                    if position['quantity'] == 1:
+                        order.bill['other'].remove(item)
+                    else:
+                        item['quantity'] -= 1
+                        item['sum'] -= item['price']
+                    break
+    await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
+    message_text = bill_to_str(order.bill)
+    await bot.send_message(message.chat.id, message_text, reply_markup=make_keyboard())
+
+@dp.message_handler(commands='cancelrecognition', chat_type='group', chat_state=ChatState.checking_bill)
+async def if_add_to_bill(message: Message):
+    arg = message.get_args()
+    data_from_db = await storage.get_data(chat=message.chat.id)
+    order = OrderInfo(**data_from_db['order'])
+    for person in order.bill['matched']:
+        if person['user_id'] == message.from_user.id:
+            for item in person['items']:
+                if item['name'].strip() == arg.strip():
+                    order.bill['other'].append({'name': item['name'], 'quantity': 1, 'sum': item['price'], 'price': item['price']})
+                    person['items'].remove(item)
+                    break
+    await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
+    message_text = bill_to_str(order.bill)
+    await bot.send_message(message.chat.id, message_text, reply_markup=make_keyboard())
+
+def bill_to_str(matched_bill):
+    message_text = ''
+    for user in matched_bill['matched']:
+        sum = 0
+        username = user['username']
+        if len(user['items']) == 0:
+            continue
+        message_text += f'Пользователь \'{username}\' заказал:\n'
+        i = 1
+        for item in user['items']:
+            name, price = item['name'], item['price']
+            message_text += f'{i}. {name} = {price / 100.0}\n'
+            i += 1
+            sum += price
+        message_text += f'Итого {sum / 100.0}\n\n'
+    if len(matched_bill['other']) == 0:
+        return message_text
+    message_text += 'Не удалось распознать:\n'
+    i = 1
+    for item in matched_bill['other']:
+        name, quantity, sum = item['name'], item['quantity'], item['sum']
+        message_text += f'{i}. {name} x {quantity} = {sum / 100.0}\n'
+        i += 1
+    return message_text
+
+def make_positions_list(items):
     names = []
     for item in items:
         quant = item['quantity']
         while quant > 0:
             names.append(item['name'])
             quant = quant - 1
+    return names
 
-    message_text = ''
-    print(items)
-    data_from_db = await storage.get_data(chat=message.chat.id)
-    order = OrderInfo(**data_from_db['order'])
-    for user in order.participants:
-        sum = 0
-        user_chat = await bot.get_chat(chat_id=user)
-        user_data = await storage.get_data(user=user)
-        message_text += f'Пользователь \'{user_chat.full_name}\' заказал:\n'
-        i = 1
-        for dish in user_data['dishes']:
-            output = get_close_matches(dish, names, n=1, cutoff=0.60)
-            if output:
-                names.remove(output[0])
-                for item in items:
-                    if item['name'] == output[0]:
-                        name = item['name']
-                        price = item['price']
-                        message_text += f'{i}. {name} = {price/100.0}\n'
-                        i += 1
-                        item['quantity'] -= 1
-                        item['sum'] -= item['price']
-                        sum += item['price']
-                        break
-        message_text += f'Итого {sum / 100.0}\n\n'
-    message_text += 'Не удалось распознать:\n'
-    i = 1
-    for item in items:
-        if item['quantity'] > 0:
-            name, quantity, sum = item['name'], item['quantity'], item['sum']
-            message_text += str(i) + f'. \'{name}\' place {quantity} == {sum / 100.0}\n'
-            i += 1
-    await bot.send_message(message.chat.id, message_text)
-
-
-@dp.message_handler(commands=['addbill'], chat_type='group', state='*',
-                  #  chat_state=ChatState.checking_bill
-)
-async def add_bill_item(message: Message):
-    data_from_db = await storage.get_data(chat=message.chat.id)
-    order = OrderInfo(**data_from_db['order'])
-    items = order.data
-    positions = message.get_args().split(' ')
-
-    for p in positions:
-        del items[int(p)]
-    await bot.send_message(message.chat.id, items)
-
-
-
+def make_keyboard():
+    add_button = InlineKeyboardButton("Опознать блюдо", switch_inline_query_current_chat='/recognizeitem ')
+    delete_button = InlineKeyboardButton("Неверное распознавание", switch_inline_query_current_chat='/cancelrecognition ')
+    keyboard_markup = InlineKeyboardMarkup()
+    keyboard_markup.row(add_button)
+    keyboard_markup.row(delete_button)
+    return keyboard_markup
