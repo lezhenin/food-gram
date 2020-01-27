@@ -12,12 +12,12 @@ from ..model.state import UserState
 async def inline(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
     if (parts[0] == '/addplace'):
-        lst = db_storage.get_places(inline_query.from_user.id)
+        lst = await db_storage.get_places(inline_query.from_user.id)
         comand = '/addplace '
         if lst == []:
             lst = ["Теремок. Блины", "Макдоналдс", "Бургер Кинг", "Баскин Роббинс", "Буше торты", "Bekitzer Бекицер", "Crispy Pizza", "Чебуречная Брынза", "Таверна Сиртаки", "Суши-бар Кидо"]
     else:
-        lst = db_storage.get_dishes(inline_query.from_user.id)
+        lst = await db_storage.get_dishes(inline_query.from_user.id)
         comand = '/add '
     inpLst = []
     if len(parts) < 2:

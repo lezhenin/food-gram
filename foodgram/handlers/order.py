@@ -114,7 +114,7 @@ async def inline_kb_answer_callback_handler(query: CallbackQuery, user_state):
 
     message_text = f"Вы приняли участие в формировании заказа, созданного в \"{chat.title}\""
 
-    if not db_storage.get_dishes(query.from_user.id):
+    if not await db_storage.get_dishes(query.from_user.id):
         await bot.send_message(query.from_user.id, message_text)
     else:
         inline_button_text = "Добавить блюдо из списка"
