@@ -2,7 +2,7 @@ BOT_API_TOKEN = '1056772125:AAFQrxSVgSzMO3Ihc9Rb3n4Uqm9pYZAa5NQ'
 
 FIREBASE_CREDENTIALS_FILE = './testcred.json'
 
-STATISTICS_SERVICE_BASE_URL = 'http://localhost:4200'
+STATISTICS_SERVICE_BASE_URL = 'http://salty-reaches-72439.herokuapp.com'
 
 BILL_DATABASE_URL = 'https://proverkacheka.nalog.ru:9999/v1'
 BILL_DATABASE_PASSWORD = 'Kzc5MTEyNDAxNzkxOjc3MDU3Nw=='

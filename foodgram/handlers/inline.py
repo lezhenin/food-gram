@@ -1,7 +1,5 @@
 import hashlib
 
-from datetime import datetime, timedelta
-
 from aiogram.types import InputTextMessageContent, InlineQueryResultArticle
 
 from .. import bot, dp, db_storage
@@ -11,28 +9,36 @@ from ..model.state import UserState
 @dp.inline_handler(lambda query: query.query.startswith('/add'), state="*")
 async def inline(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
-    if (parts[0] == '/addplace'):
-        lst = db_storage.get_places(inline_query.from_user.id)
-        comand = '/addplace '
-        if lst == []:
-            lst = ["Теремок. Блины", "Макдоналдс", "Бургер Кинг", "Баскин Роббинс", "Буше торты", "Bekitzer Бекицер", "Crispy Pizza", "Чебуречная Брынза", "Таверна Сиртаки", "Суши-бар Кидо"]
+    if parts[0] == '/addplace':
+        options = await db_storage.get_places(inline_query.from_user.id)
+        command = 'addplace'
+        if not options:
+            options = [
+                "Теремок. Блины", "Макдоналдс", "Бургер Кинг",
+                "Баскин Роббинс", "Буше торты", "Bekitzer Бекицер",
+                "Crispy Pizza", "Чебуречная Брынза", "Таверна Сиртаки", "Суши-бар Кидо"
+            ]
     else:
-        lst = db_storage.get_dishes(inline_query.from_user.id)
-        comand = '/add '
-    inpLst = []
+        options = await db_storage.get_dishes(inline_query.from_user.id)
+        command = 'add'
     if len(parts) < 2:
-        inpLst = list(map(lambda x: InlineQueryResultArticle(
-            id=hashlib.md5(x.encode()).hexdigest(),
-            title=x,
-            input_message_content=InputTextMessageContent(comand + x)
-            ), lst))
+        input_list = make_input_list(options, command)
     else:
-        inpLst = list(map(lambda x: InlineQueryResultArticle(
-            id=hashlib.md5(x.encode()).hexdigest(),
-            title=x,
-            input_message_content=InputTextMessageContent(comand + x)
-            ), list(filter(lambda x: x.lower().startswith(parts[1].lower()), lst))))
-    await bot.answer_inline_query(inline_query.id, results=inpLst, cache_time=1)
+        input_list = make_input_list(find_by_prefix(options, parts[1]), command)
+    await bot.answer_inline_query(inline_query.id, results=input_list, cache_time=1)
+
+
+@dp.inline_handler(lambda query: query.query.startswith('/delete'), state=[UserState.making_order, UserState.finish_order])
+async def inline_delete(inline_query):
+    parts = inline_query.query.split(' ', maxsplit=1)
+    data = await db_storage.get_data(user=inline_query.from_user.id)
+    lst = set(data.get('dishes', []))
+    command = 'delete'
+    if len(parts) < 2:
+        input_list = make_input_list(lst, command)
+    else:
+        input_list = make_input_list(find_by_prefix(lst, parts[1]), command)
+    await bot.answer_inline_query(inline_query.id, results=input_list, cache_time=1)
 
 @dp.inline_handler(lambda query: query.query.startswith('/take'), state="*")
 async def inline_add_to_bill(inline_query):

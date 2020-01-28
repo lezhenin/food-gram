@@ -27,6 +27,9 @@ class OrderInfo:
     def add_participant(self, user_id):
         self.participants.append(int(user_id))
 
+    def remove_participant(self, user_id):
+        self.participants.remove(int(user_id))
+
     @staticmethod
     def as_dict(order_info):
         return asdict(order_info)
