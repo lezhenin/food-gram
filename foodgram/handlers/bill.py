@@ -8,7 +8,7 @@ from ..model.state import ChatState, UserState
 from ..utils import bill
 
 
-@dp.message_handler(content_types=['photo'], state='*', chat_state=[ChatState.waiting_order])
+@dp.message_handler(content_types=['photo'], is_order_owner=True, state='*', chat_state=[ChatState.waiting_order])
 async def handle_docs_photo(message: Message):
 
     if not message.caption.startswith('/bill'):
