@@ -17,8 +17,6 @@ class OrderInfo:
     date_finished: str
     date_delivered: str
     price: int
-    data: 0
-    bill: typing.List
 
     def add_place(self, new_place):
         if new_place not in self.places:
@@ -46,7 +44,5 @@ class OrderInfo:
             date_started='',
             date_finished='',
             date_delivered='',
-            price=0,
-            data=0,
-            bill=[]
+            price=0
         )

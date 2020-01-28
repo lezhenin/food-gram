@@ -5,7 +5,6 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from .. import bot, dp, storage
 from ..model.state import ChatState, UserState
-from ..model.orderinfo import OrderInfo
 from ..utils import bill
 
 
@@ -37,11 +36,9 @@ async def handle_docs_photo(message: Message):
 
     await storage.set_state(chat=message.chat.id, state=UserState.checking_bill)
     data_from_db = await storage.get_data(chat=message.chat.id)
-    order = OrderInfo(**data_from_db['order'])
-    matched_bill = await match_bill_items(order, items)
+    matched_bill = await match_bill_items(data_from_db['order']['participants'], items)
+    await storage.update_data(chat=message.chat.id, data={'matched_bill': matched_bill})
 
-    order.bill = matched_bill
-    await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
     message_text = bill_to_str(matched_bill)
     await bot.send_message(message.chat.id, message_text, reply_markup=make_keyboard())
 
@@ -50,21 +47,21 @@ async def handle_docs_photo(message: Message):
 async def if_add_to_bill(message: Message):
     arg = message.get_args()
     data_from_db = await storage.get_data(chat=message.chat.id)
-    order = OrderInfo(**data_from_db['order'])
-    for item in order.bill['other']:
+    matched_bill = data_from_db['matched_bill']
+    for item in matched_bill['other']:
         if item['name'].strip() == arg.strip():
             position = item
-            for person in order.bill['matched']:
+            for person in matched_bill['matched']:
                 if person['user_id'] == message.from_user.id:
                     person['items'].append({'name': position['name'], 'price': position['price']})
                     if position['quantity'] == 1:
-                        order.bill['other'].remove(item)
+                        matched_bill['other'].remove(item)
                     else:
                         item['quantity'] -= 1
                         item['sum'] -= item['price']
                     break
-    await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
-    message_text = bill_to_str(order.bill)
+    await storage.update_data(chat=message.chat.id, data={'matched_bill': matched_bill})
+    message_text = bill_to_str(matched_bill)
     await bot.send_message(message.chat.id, message_text, reply_markup=make_keyboard())
 
 
@@ -72,23 +69,23 @@ async def if_add_to_bill(message: Message):
 async def if_add_to_bill(message: Message):
     arg = message.get_args()
     data_from_db = await storage.get_data(chat=message.chat.id)
-    order = OrderInfo(**data_from_db['order'])
-    for person in order.bill['matched']:
+    matched_bill = data_from_db['matched_bill']
+    for person in matched_bill['matched']:
         if person['user_id'] == message.from_user.id:
             for item in person['items']:
                 if item['name'].strip() == arg.strip():
-                    order.bill['other'].append({'name': item['name'], 'quantity': 1, 'sum': item['price'], 'price': item['price']})
+                    matched_bill['other'].append({'name': item['name'], 'quantity': 1, 'sum': item['price'], 'price': item['price']})
                     person['items'].remove(item)
                     break
-    await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
-    message_text = bill_to_str(order.bill)
+    await storage.update_data(chat=message.chat.id, data={'matched_bill': matched_bill})
+    message_text = bill_to_str(matched_bill)
     await bot.send_message(message.chat.id, message_text, reply_markup=make_keyboard())
 
 
-async def match_bill_items(order, items):
+async def match_bill_items(participants, items):
     names = make_positions_list(items)
     matched_bill = {'matched': [], 'other': []}
-    for user in order.participants:
+    for user in participants:
         matched_dish = []
         user_chat = await bot.get_chat(chat_id=user)
         user_data = await storage.get_data(user=user)

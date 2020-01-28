@@ -40,13 +40,14 @@ async def inline_delete(inline_query):
         input_list = make_input_list(find_by_prefix(lst, parts[1]), command)
     await bot.answer_inline_query(inline_query.id, results=input_list, cache_time=1)
 
+
 @dp.inline_handler(lambda query: query.query.startswith('/take'), state="*")
 async def inline_add_to_bill(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
     user_data = await db_storage.get_data(user=inline_query.from_user.id)
     data = await db_storage.get_data(chat=user_data['order_chat_id'])
     lst = []
-    for item in data['order']['bill']['other']:
+    for item in data['matched_bill']['other']:
         lst.append(item['name'])
     command = 'take'
     if len(parts) < 2:
@@ -55,13 +56,14 @@ async def inline_add_to_bill(inline_query):
         input_list = make_input_list(find_by_prefix(lst, parts[1]), command)
     await bot.answer_inline_query(inline_query.id, results=input_list, cache_time=1)
 
+
 @dp.inline_handler(lambda query: query.query.startswith('/drop'), state="*")
 async def inline_add_to_bill(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
     user_data = await db_storage.get_data(user=inline_query.from_user.id)
     data = await db_storage.get_data(chat=user_data['order_chat_id'])
     lst = []
-    for person in data['order']['bill']['matched']:
+    for person in data['matched_bill']['matched']:
         if person['user_id'] == inline_query.from_user.id:
             for item in person['items']:
                 lst.append(item['name'])
@@ -71,6 +73,7 @@ async def inline_add_to_bill(inline_query):
     else:
         input_list = make_input_list(find_by_prefix(lst, parts[1]), command)
     await bot.answer_inline_query(inline_query.id, results=input_list, cache_time=1)
+
 
 def make_input_list(items, command):
     input_list = list(map(lambda item: InlineQueryResultArticle(
