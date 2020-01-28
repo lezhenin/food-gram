@@ -105,11 +105,14 @@ async def match_bill_items(participants, items):
             # [optional] 'n' is maximum number of close matches
             # [optional] 'cutoff' - where to stop considering a word as a match
             # (0.99 being the closest to word while 0.0 being otherwise)
-            output = get_close_matches(dish, names, n=1, cutoff=0.60)
+            output = get_close_matches(dish.lower(), names.keys(), n=1, cutoff=0.60)
             if output:
-                names.remove(output[0])
+                res = names.pop(output[0])
+                match = res.pop(0)
+                if len(res) > 0:
+                    names[output[0]] = res
                 for item in items:
-                    if item['name'] == output[0]:
+                    if item['name'] == match:
                         name, price = item['name'], item['price']
                         matched_dish.append({'name': name, 'price': price})
                         item['quantity'] -= 1
@@ -151,11 +154,14 @@ def bill_to_str(matched_bill):
 
 
 def make_positions_list(items):
-    names = []
+    names = {}
     for item in items:
         quant = item['quantity']
         while quant > 0:
-            names.append(item['name'])
+            if item['name'].lower() in names:
+                names[item['name'].lower()].append(item['name'])
+            else:
+                names[item['name'].lower()] = [item['name']]
             quant = quant - 1
     return names
 
