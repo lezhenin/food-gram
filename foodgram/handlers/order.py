@@ -109,7 +109,7 @@ async def if_finish_order(message: Message):
     await storage.set_state(chat=message.chat.id, state=ChatState.waiting_order)
 
 
-@dp.message_handler(commands='closeorder', chat_type='group', is_order_owner=True, chat_state=ChatState.waiting_order)
+@dp.message_handler(commands='closeorder', chat_type='group', is_order_owner=True, chat_state=[ChatState.waiting_order, ChatState.checking_bill])
 async def if_close_order(message: Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
