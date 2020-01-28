@@ -1,13 +1,36 @@
+import secrets
+import hashlib
+
+import requests_async as requests
+
 from ..model.orderinfo import OrderInfo
 from ..config import STATISTICS_SERVICE_BASE_URL
 
 
-def get_chat_url(chat_id):
-    return f'{STATISTICS_SERVICE_BASE_URL}/chat/{chat_id}'
+async def get_chat_url(chat_id):
+    action = f'chat/{chat_id}'
+    token, digest = generate_token()
+    await send_digest(digest, action)
+    return f'{STATISTICS_SERVICE_BASE_URL}/{action}'
 
 
 def get_user_url(user_id):
-    return f'{STATISTICS_SERVICE_BASE_URL}/user/{user_id}'
+    action = f'user/{user_id}'
+    token, digest = generate_token()
+    await send_digest(digest, action)
+    return f'{STATISTICS_SERVICE_BASE_URL}/{action}?token={token}'
+
+
+def generate_token():
+    token = secrets.token_hex(16)
+    digest = hashlib.sha256().update(token).hexdigest()
+    return token, digest
+
+
+async def send_digest(digest, action):
+    url = f'{STATISTICS_SERVICE_BASE_URL}/auth'
+    params = {'hash': digest, 'action': action}
+    await requests.post(url, params=params)
 
 
 async def collect_data(bot, storage, chat_id):
