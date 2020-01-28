@@ -10,6 +10,10 @@ from ..utils import bill
 
 @dp.message_handler(content_types=['photo'], state='*', chat_state=[ChatState.waiting_order])
 async def handle_docs_photo(message: Message):
+
+    if not message.caption.startswith('/bill'):
+        return
+
     photos = message.photo
     if len(photos) < 1:
         return
