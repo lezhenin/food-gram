@@ -127,7 +127,7 @@ async def if_cancel_in_private(message: Message):
     chat_id = data['order_chat_id']
     chat = await bot.get_chat(chat_id=chat_id)
     await storage.reset_state(user=message.from_user.id, with_data=True)
-    await storage.reset_state(chat_id=chat.id, user=message.from_user.id, with_data=True)
+    await storage.reset_state(chat=chat_id, user=message.from_user.id, with_data=True)
     data = await storage.get_data(chat=chat.id)
     order = OrderInfo(**data['order'])
     order.remove_participant(message.from_user.id)
