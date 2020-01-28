@@ -43,7 +43,7 @@ async def handle_docs_photo(message: Message):
     await bot.send_message(message.chat.id, message_text, reply_markup=make_keyboard())
 
 
-@dp.message_handler(commands='take', chat_type='group', chat_state=ChatState.checking_bill)
+@dp.message_handler(commands='take', chat_type='group', is_order_participant=True, chat_state=ChatState.checking_bill)
 async def if_add_to_bill(message: Message):
     arg = message.get_args()
     data_from_db = await storage.get_data(chat=message.chat.id)
@@ -65,7 +65,7 @@ async def if_add_to_bill(message: Message):
     await bot.send_message(message.chat.id, message_text, reply_markup=make_keyboard())
 
 
-@dp.message_handler(commands='drop', chat_type='group', chat_state=ChatState.checking_bill)
+@dp.message_handler(commands='drop', chat_type='group', is_order_participant=True, chat_state=ChatState.checking_bill)
 async def if_add_to_bill(message: Message):
     arg = message.get_args()
     data_from_db = await storage.get_data(chat=message.chat.id)
@@ -74,7 +74,12 @@ async def if_add_to_bill(message: Message):
         if person['user_id'] == message.from_user.id:
             for item in person['items']:
                 if item['name'].strip() == arg.strip():
-                    matched_bill['other'].append({'name': item['name'], 'quantity': 1, 'sum': item['price'], 'price': item['price']})
+                    matched_bill['other'].append({
+                        'name': item['name'],
+                        'quantity': 1,
+                        'sum': item['price'],
+                        'price': item['price']
+                    })
                     person['items'].remove(item)
                     break
     await storage.update_data(chat=message.chat.id, data={'matched_bill': matched_bill})

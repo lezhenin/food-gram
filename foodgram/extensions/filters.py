@@ -1,6 +1,10 @@
 from aiogram.dispatcher.filters import AbstractFilter
 
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineQuery
+
+"""
+These filters currently work for messages and call back queries
+"""
 
 
 def unwrap_query(obj):
@@ -127,6 +131,7 @@ class ChatStateFilter(AbstractFilter):
     async def check(self, obj):
 
         chat_id = get_chat_id(obj)
+
         if chat_id is None:
             current_state = None
         else:

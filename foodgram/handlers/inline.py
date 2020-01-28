@@ -3,7 +3,7 @@ import hashlib
 from aiogram.types import InputTextMessageContent, InlineQueryResultArticle
 
 from .. import bot, dp, db_storage
-from ..model.state import UserState
+from ..model.state import UserState, ChatState
 
 
 @dp.inline_handler(lambda query: query.query.startswith('/add'), state="*")
@@ -28,7 +28,7 @@ async def inline(inline_query):
     await bot.answer_inline_query(inline_query.id, results=input_list, cache_time=1)
 
 
-@dp.inline_handler(lambda query: query.query.startswith('/delete'), state=[UserState.making_order, UserState.finish_order])
+@dp.inline_handler(lambda query: query.query.startswith('/delete'), state='*')
 async def inline_delete(inline_query):
     parts = inline_query.query.split(' ', maxsplit=1)
     data = await db_storage.get_data(user=inline_query.from_user.id)

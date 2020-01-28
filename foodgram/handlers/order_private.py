@@ -4,6 +4,7 @@ from .. import dp, bot, storage
 from ..model.orderinfo import OrderInfo
 from foodgram.model.state import UserState
 
+
 def make_keyboard():
     add_button = InlineKeyboardButton("Добавить блюдо", switch_inline_query_current_chat='/add ')
     delete_button = InlineKeyboardButton("Удалить блюдо", switch_inline_query_current_chat='/delete ')
@@ -11,8 +12,9 @@ def make_keyboard():
     keyboard_markup.add(add_button, delete_button)
     return keyboard_markup
 
+
 @dp.message_handler(
-    commands=['add'], chat_type='private', state='*', is_order_participant=True,
+    commands=['add'], chat_type='private', state='*',
     user_state=[UserState.making_order, UserState.finish_order]
 )
 async def if_add_in_private(message: Message):
@@ -28,6 +30,7 @@ async def if_add_in_private(message: Message):
 
     message_text = f"Блюдо \"{dish}\" добавлено."
     await bot.send_message(message.from_user.id, message_text, reply_markup=make_keyboard())
+
 
 @dp.message_handler(
     commands=['delete'], regexp='/delete \\w+\\s*', chat_type='private',
@@ -48,6 +51,7 @@ async def if_delete_in_private(message: Message):
         await storage.update_data(user=message.from_user.id, data={'dishes': dishes})
         message_text = f"Блюдо \"{dish}\" удалено."
         await bot.send_message(message.from_user.id, message_text, reply_markup=make_keyboard())
+
 
 @dp.message_handler(
     commands=['change'], regexp='/change \\d+ \\w+', chat_type='private', state='*',
@@ -75,6 +79,7 @@ async def if_list_in_private(message: Message):
     dishes = [str(i + 1) + '. ' + dishes[i] for i in range(len(dishes))]
     message_text = 'Блюда в заказе:\n' + '\n'.join(dishes) if (len(dishes) > 0) else 'Ваш заказ пуст'
     await bot.send_message(message.from_user.id, message_text, reply_markup=make_keyboard())
+
 
 @dp.message_handler(
     commands=['finish'], chat_type='private', state='*',

@@ -109,35 +109,47 @@ async def if_finish_order(message: Message):
     await storage.set_state(chat=message.chat.id, state=ChatState.waiting_order)
 
 
-@dp.message_handler(commands='closeorder', chat_type='group', is_order_owner=True, chat_state=[ChatState.waiting_order, ChatState.checking_bill])
-async def if_close_order(message: Message):
+@dp.message_handler(
+    commands='notify', chat_type='group', is_order_owner=True,
+    chat_state=[ChatState.waiting_order, ChatState.checking_bill]
+)
+async def if_notify(message: Message):
     data = await storage.get_data(chat=message.chat.id)
     order = OrderInfo(**data['order'])
     order.date_delivered = timestamp()
     await storage.update_data(chat=message.chat.id, data={'order': OrderInfo.as_dict(order)})
 
-    stats_data = await stats.collect_data(bot, storage, message.chat.id)
-    await storage.add_stats(stats_data)
-
     message_text = ""
-    for user in stats_data['participants']:
-        username = user['username']
+    for user_id in order.participants:
+        user_chat = await bot.get_chat(user_id)
+        username = user_chat.username
         if username is not None:
             message_text += f"@{username}, "
         else:
-            await bot.send_message(user['user_id'], "Заказ доставлен.")
+            await bot.send_message(user_id, "Заказ доставлен.")
     if len(message_text) > 0:
         message_text += "заказ доставлен."
     else:
         message_text += "Заказ доставлен. "
-    message_text += "Текущий заказ завершен."
     await bot.send_message(message.chat.id, message_text)
 
+
+@dp.message_handler(
+    commands='closeorder', chat_type='group', is_order_owner=True,
+    chat_state=[ChatState.waiting_order, ChatState.checking_bill]
+)
+async def if_close_order(message: Message):
+    stats_data = await stats.collect_data(bot, storage, message.chat.id)
+    await storage.add_stats(stats_data)
     await clean_data_and_state(message.chat.id)
+    message_text = "Текущий заказ завершен."
+    await bot.send_message(message.chat.id, message_text)
 
 
-@dp.message_handler(commands='cancelorder', chat_type='group', is_order_owner=True, chat_state_not=[ChatState.idle, None])
-async def if_cancel(message: Message):
+@dp.message_handler(
+    commands='cancelorder', chat_type='group', is_order_owner=True, chat_state_not=[ChatState.idle, None]
+)
+async def if_cancel_order(message: Message):
     await clean_data_and_state(message.chat.id)
     message_text = "Текущий заказ отменен."
     await bot.send_message(message.chat.id, message_text)
