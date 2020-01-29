@@ -41,7 +41,9 @@ async def handle_docs_photo(message: Message):
     await storage.set_state(chat=message.chat.id, state=UserState.checking_bill)
     data_from_db = await storage.get_data(chat=message.chat.id)
     matched_bill = await match_bill_items(data_from_db['order']['participants'], items)
-    await storage.update_data(chat=message.chat.id, data={'matched_bill': matched_bill})
+    data_from_db['matched_bill'] = matched_bill
+    data_from_db['order']['price'] = data['document']['receipt']['totalSum']
+    await storage.set_data(chat=message.chat.id, data=data_from_db)
 
     message_text = bill_to_str(matched_bill)
     await bot.send_message(message.chat.id, message_text, reply_markup=make_keyboard())
