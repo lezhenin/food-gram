@@ -1,12 +1,16 @@
-from envparse import env
+from environs import Env
 
-env.read_envfile('config.env')
+env = Env()
 
-BOT_API_TOKEN = env.str('BOT_API_TOKEN')
+env.read_env()
 
-FIREBASE_CREDENTIALS_FILE = env.str('FIREBASE_CREDENTIALS_FILE')
+with env.prefixed('FOODGRAM_'):
 
-STATISTICS_SERVICE_BASE_URL = env.str('STATISTICS_SERVICE_BASE_URL')
+    BOT_API_TOKEN = env.str('BOT_API_TOKEN')
 
-BILL_DATABASE_URL = env.str('BILL_DATABASE_URL')
-BILL_DATABASE_PASSWORD = env.str('BILL_DATABASE_PASSWORD')
+    FIREBASE_CREDENTIALS = env.json('FIREBASE_CREDENTIALS')
+
+    STATISTICS_SERVICE_BASE_URL = env.str('STATISTICS_SERVICE_BASE_URL')
+
+    BILL_DATABASE_URL = env.str('BILL_DATABASE_URL')
+    BILL_DATABASE_PASSWORD = env.str('BILL_DATABASE_PASSWORD')

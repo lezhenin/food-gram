@@ -7,14 +7,14 @@ from aiogram.utils import executor
 from .extensions.filters import *
 from .extensions.firebase import FirebaseStorage
 
-from .config import BOT_API_TOKEN, FIREBASE_CREDENTIALS_FILE
+from .config import BOT_API_TOKEN, FIREBASE_CREDENTIALS
 
 logging.basicConfig(level=logging.DEBUG)
 
 bot = Bot(token=BOT_API_TOKEN)
 bot.parse_mode = 'HTML'
 
-db_storage = FirebaseStorage(FIREBASE_CREDENTIALS_FILE)
+db_storage = FirebaseStorage(FIREBASE_CREDENTIALS)
 storage = db_storage
 
 dp = Dispatcher(bot, storage=storage)
