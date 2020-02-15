@@ -3,7 +3,6 @@ import hashlib
 from aiogram.types import InputTextMessageContent, InlineQueryResultArticle
 
 from .. import bot, dp, db_storage
-from ..model.state import UserState, ChatState
 
 
 @dp.inline_handler(lambda query: query.query.startswith('/add'), state="*")

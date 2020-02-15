@@ -9,9 +9,9 @@ from ..config import BILL_DATABASE_URL, BILL_DATABASE_PASSWORD
 
 async def is_exist(bill):
     fn, fd, fpd = bill['fn'], bill['i'], bill['fp']
-    date, sum = bill['t'],  bill['s'].replace('.', '')
+    date, amount = bill['t'],  bill['s'].replace('.', '')
     url = f'{BILL_DATABASE_URL}/ofds/*/inns/*/fss/{fn}/operations/1/tickets/{fd}'
-    params = {'fiscalSign': fpd, 'date': date, 'sum': sum}
+    params = {'fiscalSign': fpd, 'date': date, 'sum': amount}
     response = await requests.get(url, params=params)
     logging.debug(f'Check is bill exists: response_code = {response.status_code}')
     return response.status_code == 204

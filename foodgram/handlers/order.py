@@ -57,7 +57,6 @@ async def clean_data_and_state(chat_id):
     commands=['start'], chat_type='group', chat_state=[ChatState.idle, None]
 )
 async def if_start(message: Message):
-
     user_data = await storage.get_data(user=message.from_user.id)
     if await check_is_taking_part(message.from_user.id, user_data):
         return
@@ -159,7 +158,6 @@ async def if_cancel_order(message: Message):
     state='*', chat_state=[ChatState.making_order, ChatState.gather_places, ChatState.idle, None]
 )
 async def inline_kb_answer_callback_handler(query: CallbackQuery):
-
     user_data = await storage.get_data(user=query.from_user.id)
     if await check_is_taking_part(query.from_user.id, user_data, query.message.chat.id):
         return

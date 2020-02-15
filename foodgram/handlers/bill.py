@@ -123,8 +123,8 @@ async def match_bill_items(participants, items):
         matched_bill['matched'].append({'user_id': user, 'username': user_chat.full_name, 'items': matched_dish})
     for item in items:
         if item['quantity'] > 0:
-            name, quantity, sum, price = item['name'], item['quantity'], item['sum'], item['price']
-            matched_bill['other'].append({'name': name, 'quantity': quantity, 'sum': sum, 'price': price})
+            name, quantity, amount, price = item['name'], item['quantity'], item['sum'], item['price']
+            matched_bill['other'].append({'name': name, 'quantity': quantity, 'sum': amount, 'price': price})
 
     return matched_bill
 
@@ -132,7 +132,7 @@ async def match_bill_items(participants, items):
 def bill_to_str(matched_bill):
     message_text = ''
     for user in matched_bill['matched']:
-        sum = 0
+        amount = 0
         username = user['username']
         if len(user['items']) == 0:
             continue
@@ -142,15 +142,15 @@ def bill_to_str(matched_bill):
             name, price = item['name'], item['price']
             message_text += f'{i}. {name} = {price / 100.0}\n'
             i += 1
-            sum += price
-        message_text += f'Итого {sum / 100.0}\n\n'
+            amount += price
+        message_text += f'Итого {amount / 100.0}\n\n'
     if len(matched_bill['other']) == 0:
         return message_text
     message_text += 'Не удалось распознать:\n'
     i = 1
     for item in matched_bill['other']:
-        name, quantity, sum = item['name'], item['quantity'], item['sum']
-        message_text += f'{i}. {name} x {quantity} = {sum / 100.0}\n'
+        name, quantity, amount = item['name'], item['quantity'], item['sum']
+        message_text += f'{i}. {name} x {quantity} = {amount / 100.0}\n'
         i += 1
     return message_text
 

@@ -1,6 +1,6 @@
 from aiogram.dispatcher.filters import AbstractFilter
 
-from aiogram.types import Message, CallbackQuery, InlineQuery
+from aiogram.types import Message, CallbackQuery
 
 """
 These filters currently work for messages and call back queries
